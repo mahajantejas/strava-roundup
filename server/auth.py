@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request
 import os
 import requests
 from fastapi.responses import RedirectResponse
+from models import Athlete
+from database import SessionLocal
 
 router = APIRouter()
 
@@ -12,7 +14,7 @@ STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 def strava_auth_redirect():
     client_id = os.getenv("STRAVA_CLIENT_ID")
     redirect_uri = os.getenv("STRAVA_REDIRECT_URI")
-    scope = "read,activity:read_all"
+    scope = "read,activity:read_all,profile:read_all"
 
     auth_url = (
         f"{STRAVA_AUTH_URL}?client_id={client_id}"
@@ -23,6 +25,7 @@ def strava_auth_redirect():
     )
 
     return RedirectResponse(url=auth_url)
+
 @router.get("/auth/strava/callback")
 def strava_callback(code: str):
     client_id = os.getenv("STRAVA_CLIENT_ID")
@@ -40,10 +43,51 @@ def strava_callback(code: str):
         return {"error": "Failed to exchange token", "details": response.text}
 
     token_data = response.json()
+    athlete_info = token_data.get("athlete", {}) or {}
 
-    # For now, just return token info to confirm it works
-    return {
+    # Persist athlete info and tokens to DB
+    persisted = None
+    try: 
+        strava_id = athlete_info.get("id")
+        if strava_id is not None: 
+            with SessionLocal() as db:
+                existing = db.query(Athlete).filter(Athlete.strava_id == strava_id).first()
+                if existing:
+                    #update tokens / basic profile fields 
+                    existing.firstname = athlete_info.get("firstname", existing.firstname)
+                    existing.lastname = athlete_info.get("lastname", existing.lastname)
+                    existing.access_token = token_data.get("access_token", existing.access_token)
+                    existing.refresh_token = token_data.get("refresh_token", existing.refresh_token)
+                    existing.expires_at = token_data.get("expires_at", existing.expires_at)
+                    db.add(existing)
+                    db.commit()
+                    db.refresh(existing)
+                else:
+                    new_athlete = Athlete(
+                        strava_id=strava_id,
+                        firstname=athlete_info.get("firstname"),
+                        lastname=athlete_info.get("lastname"),
+                        access_token=token_data.get("access_token"),
+                        refresh_token=token_data.get("refresh_token"),
+                        expires_at=token_data.get("expires_at")
+                    )
+                    db.add(new_athlete)
+                    db.commit()
+                    db.refresh(new_athlete)
+                    persisted = new_athlete
+        else:
+            persisted = None
+    except Exception: 
+        # avoid crashing on DB errors: consider logging these
+        persisted = None
+    # Return token + athlete info (and persisted DB id if available)
+    result = {
         "access_token": token_data.get("access_token"),
-        "athlete": token_data.get("athlete", {}),
+        "athlete": athlete_info,
         "expires_at": token_data.get("expires_at"),
     }
+    if persisted:
+        result["db_id"] = persisted.id
+    
+    return result
+    
