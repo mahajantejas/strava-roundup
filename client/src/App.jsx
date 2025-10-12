@@ -1,26 +1,99 @@
-import { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import AuthCallback from "./AuthCallback";
+import "./App.css";
 
-function App() {
-  const [athletes, setAthletes] = useState([]);
+function Landing() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetch("http://127.0.0.1:8000/athletes")
-      .then((res) => res.json())
-      .then((data) => setAthletes(data));
-  }, []);
+  const handleLogin = () => {
+    setError(null);
+    setLoading(true);
+    try {
+      window.location.href = "/auth/strava";
+    } catch (err) {
+      setLoading(false);
+      setError("Failed to redirect to Strava. Please try again.");
+    }
+  };
 
   return (
-    <div>
-      <h1>🏃 Athletes</h1>
-      <ul>
-        {athletes.map((a) => (
-          <li key={a.id}>
-            {a.firstname} {a.lastname} (Strava ID: {a.strava_id})
-          </li>
-        ))}
-      </ul>
-    </div>
+    <main className="app">
+      <header className="hero">
+        <div className="hero__content">
+          <span className="hero__eyebrow">Strava Roundup</span>
+          <h1 className="hero__headline">Your training, visualized in minutes.</h1>
+          <p className="hero__body">
+            Connect your Strava account and instantly generate a beautiful roundup of your miles, elevation,
+            and breakthrough efforts—perfect for sharing or tracking your goals.
+          </p>
+
+          <ul className="hero__features">
+            <li>Automatic mileage, elevation, and time summaries month by month.</li>
+            <li>Spot your strongest streaks with trend lines and personal records.</li>
+            <li>Export-ready highlights for posting anywhere in one click.</li>
+            <li>Read-only connection keeps your Strava data untouched.</li>
+          </ul>
+
+          <div className="hero__actions">
+            <button
+              onClick={handleLogin}
+              disabled={loading}
+              className="hero__cta"
+              aria-busy={loading}
+            >
+              {loading ? "Connecting to Strava…" : "Connect with Strava"}
+            </button>
+            <p className="hero__note">Secured with Strava OAuth. We never post or modify your activities.</p>
+          </div>
+
+          {error && <div className="hero__error">{error}</div>}
+
+          <small>
+            For testing:{" "}
+            <Link to="/auth/callback" className="hero__testing">
+              open /auth/callback
+            </Link>
+            .
+          </small>
+        </div>
+
+        <aside className="hero__visual" aria-hidden="true">
+          <div className="hero__visual-card">
+            <span className="hero__visual-chip">Preview</span>
+            <div className="hero__visual-grid">
+              <div>
+                <span className="hero__visual-label">Total distance</span>
+                <span className="hero__visual-metric">1,248 km</span>
+              </div>
+              <div>
+                <span className="hero__visual-label">Elevation gain</span>
+                <span className="hero__visual-metric">31,420 m</span>
+              </div>
+              <div>
+                <span className="hero__visual-label">Active time</span>
+                <span className="hero__visual-metric">182 h</span>
+              </div>
+            </div>
+            <div className="hero__visual-footer">
+              <span>Longest streak</span>
+              <strong>21 days</strong>
+            </div>
+          </div>
+        </aside>
+      </header>
+    </main>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

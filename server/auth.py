@@ -1,6 +1,8 @@
+from unittest import result
 from fastapi import APIRouter, Request
 import os
 import requests
+from urllib.parse import quote
 from fastapi.responses import RedirectResponse
 from models import Athlete
 from database import SessionLocal
@@ -62,6 +64,7 @@ def strava_callback(code: str):
                     db.add(existing)
                     db.commit()
                     db.refresh(existing)
+                    persisted = existing
                 else:
                     new_athlete = Athlete(
                         strava_id=strava_id,
@@ -81,13 +84,17 @@ def strava_callback(code: str):
         # avoid crashing on DB errors: consider logging these
         persisted = None
     # Return token + athlete info (and persisted DB id if available)
-    result = {
-        "access_token": token_data.get("access_token"),
-        "athlete": athlete_info,
-        "expires_at": token_data.get("expires_at"),
-    }
-    if persisted:
+
         result["db_id"] = persisted.id
+        name = quote(f"{persisted.firstname} {persisted.lastname}")
+        return RedirectResponse(f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}")
+    #After persisting, redirecct the browser to the frontend call back page (absolute url)
+    frontend_cb = os.getenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
+    if persisted: 
+        name = quote(f"{persisted.firstname} {persisted.lastname}").strip()
+        redirect_url = f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}"
+    else:
+        redirect_url
     
-    return result
-    
+    return RedirectResponse(url=redirect_url)
+        
