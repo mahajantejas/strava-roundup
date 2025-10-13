@@ -88,6 +88,7 @@ def strava_callback(code: str):
         result["db_id"] = persisted.id
         name = quote(f"{persisted.firstname} {persisted.lastname}")
         return RedirectResponse(f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}")
+    
     #After persisting, redirecct the browser to the frontend call back page (absolute url)
     frontend_cb = os.getenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
     if persisted: 
