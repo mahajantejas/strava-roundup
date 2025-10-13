@@ -22,103 +22,122 @@ function Landing() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-white">
-      <div className="w-full max-w-6xl">
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/50 overflow-hidden">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 p-6 sm:p-8 lg:p-12">
-            {/* Content Section */}
-            <div className="flex flex-col gap-6 lg:gap-8">
-              <div className="space-y-4">
-                <Badge variant="secondary" className="text-sky-600 bg-sky-50 border-sky-200">
-                  Strava Roundup
-                </Badge>
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight">
-                  Strava Premium Visuals, for free ;)
-                </h1>
-                <p className="text-lg text-slate-600 leading-relaxed max-w-2xl">
-                  Connect your Strava account and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
+    <main className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <section className="relative h-[70vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80')`
+          }}
+        >
+          {/* Overlay for better text readability */}
+          <div className="absolute inset-0 bg-black/40"></div>
+        </div>
+        
+        {/* Hero Content */}
+        <div className="relative z-10 text-center text-white px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+            Your Strava Round Up
+          </h1>
+          <p className="text-lg sm:text-xl lg:text-2xl mb-8 text-gray-200 max-w-3xl mx-auto leading-relaxed">
+            Generate Strava Premium Like Analytics, For Free ;)
+          </p>
+          <Button
+            onClick={handleLogin}
+            disabled={loading}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+            size="lg"
+          >
+            {loading ? "Connecting to Strava…" : "Connect with Strava"}
+          </Button>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+              Fuel For Your Social Flex
+            </h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+            Connect your Strava account and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
+            </p>
+          </div>
+
+          {/* Feature Cards */}
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Advanced Analytics Card */}
+            <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                  </svg>
+                </div>
+                <CardTitle className="text-xl font-semibold text-gray-900">Advanced Analytics</CardTitle>
+              </div>
+              <CardContent className="p-0">
+                <p className="text-gray-600 leading-relaxed">
+                  Dive deep into your performance data with comprehensive charts and graphs.
                 </p>
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mt-2 flex-shrink-0"></div>
-                  <p className="text-slate-700">Month by month miles and minutes spent sweating it out.</p>
+            {/* Social Sharing Card */}
+            <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                  <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mt-2 flex-shrink-0"></div>
-                  <p className="text-slate-700">Export-ready highlights that fuel your flex.</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mt-2 flex-shrink-0"></div>
-                  <p className="text-slate-700">Read-only connection keeps your Strava data secure</p>
-                </div>
+                <CardTitle className="text-xl font-semibold text-gray-900">Export-Ready Highlights</CardTitle>
               </div>
-
-              <div className="space-y-4">
-                <Button
-                  onClick={handleLogin}
-                  disabled={loading}
-                  className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
-                  size="lg"
-                >
-                  {loading ? "Connecting to Strava…" : "Connect with Strava"}
-                </Button>
-                <p className="text-sm text-slate-500">
-                  Secured with Strava OAuth. We never post or modify your activities.
+              <CardContent className="p-0">
+                <p className="text-gray-600 leading-relaxed">
+                Share your accomplishments with your friends and followers on your favorite social media platforms.
                 </p>
-              </div>
+              </CardContent>
+            </Card>
 
-              {error && (
-                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700">
-                  {error}
+            {/* Secure Connection Card */}
+            <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                  </svg>
                 </div>
-              )}
-
-              <div className="text-sm text-slate-500">
-                For testing:{" "}
-                <Link to="/auth/callback" className="text-sky-600 hover:text-sky-700 underline">
-                  open /auth/callback
-                </Link>
-                .
+                <CardTitle className="text-xl font-semibold text-gray-900">Secure Connection</CardTitle>
               </div>
-            </div>
+              <CardContent className="p-0">
+                <p className="text-gray-600 leading-relaxed">
+                Read-only connection keeps your Strava data secure.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Visual Section */}
-            <div className="relative">
-              <div className="bg-gradient-to-br from-sky-100/50 to-blue-200/30 rounded-2xl border border-slate-200/50 p-6 lg:p-8 h-full">
-                <Card className="bg-slate-900/90 backdrop-blur-sm border-slate-700/50 text-white shadow-2xl">
-                  <CardHeader className="pb-4">
-                    <Badge variant="outline" className="w-fit text-sky-300 border-slate-600 bg-slate-800/50">
-                      Preview
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Total distance</p>
-                        <p className="text-2xl font-semibold">1,248 km</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Elevation gain</p>
-                        <p className="text-2xl font-semibold">31,420 m</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Active time</p>
-                        <p className="text-2xl font-semibold">182 h</p>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center pt-4 border-t border-slate-700/50">
-                      <span className="text-sm text-slate-300">Longest streak</span>
-                      <span className="font-semibold">21 days</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+          {/* Error Display */}
+          {error && (
+            <div className="mt-8 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-center">
+              {error}
             </div>
+          )}
+
+          {/* Testing Link */}
+          <div className="text-center mt-12 text-sm text-gray-500">
+            For testing:{" "}
+            <Link to="/auth/callback" className="text-blue-600 hover:text-blue-700 underline">
+              open /auth/callback
+            </Link>
+            .
           </div>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
