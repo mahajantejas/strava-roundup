@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
-import "./AuthCallback.css";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { CheckCircle, AlertCircle, Clock, Loader2 } from "lucide-react";
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const code = searchParams.get("code");
   const status = searchParams.get("status");
   const rawName = searchParams.get("name");
@@ -25,6 +31,11 @@ export default function AuthCallback() {
   }, [rawName]);
 
   useEffect(() => {
+    // Store athlete name in localStorage for dashboard
+    if (decodedName) {
+      localStorage.setItem('athleteName', decodedName);
+    }
+
     // Backend already exchanged the code and redirected with a status flag.
     if (status) {
       const normalized = status.toLowerCase();
@@ -86,111 +97,179 @@ export default function AuthCallback() {
   const safeDisplayName = athlete?.displayName || "Strava athlete";
   const formattedDbId = athlete?.dbId ? `#${athlete.dbId}` : "Pending assignment";
 
-  const headerBadge = loading ? "…" : isSuccess ? "✓" : "!";
-  const headerTitle = loading
-    ? "Finishing your Strava sign-in"
-    : isSuccess
-    ? `Welcome aboard, ${safeDisplayName}!`
-    : "We hit a snag connecting";
-  const headerSubtitle = loading
-    ? "We’re completing the secure handshake with Strava. Keep this tab open."
-    : isSuccess
-    ? "Your Strava account is now linked. We’ll start syncing your latest efforts in the background."
-    : "Please retry the connection. If the issue persists, try again in a few minutes.";
+  const handleGetActivities = () => {
+    navigate('/dashboard');
+  };
 
   return (
-    <div className="callback">
-      <section className="callback__card" aria-live="polite">
-        <div className="callback__header">
-          <span className="callback__badge" aria-hidden="true">
-            {headerBadge}
-          </span>
-          <div>
-            <h1 className="callback__title">{headerTitle}</h1>
-            <p className="callback__muted">{headerSubtitle}</p>
-          </div>
-        </div>
-
-        {loading && (
-          <>
-            <div className="callback__status">
-              <span className="callback__status-icon" aria-hidden="true">
-                ⏳
-              </span>
-              <div className="callback__status-text">
-                <strong>Connecting to Strava</strong>
-                <span>Authorizing your account and exchanging secure tokens…</span>
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-white">
+      <div className="w-full max-w-4xl">
+        <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-xl">
+          <CardHeader className="text-center pb-6">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center">
+                {loading ? (
+                  <Loader2 className="w-6 h-6 text-sky-600 animate-spin" />
+                ) : isSuccess ? (
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-6 h-6 text-red-600" />
+                )}
+              </div>
+              <div>
+                <CardTitle className="text-2xl sm:text-3xl font-bold text-slate-900">
+                  {loading
+                    ? "Finishing your Strava sign-in"
+                    : isSuccess
+                    ? `Welcome aboard, ${safeDisplayName}!`
+                    : "We hit a snag connecting"}
+                </CardTitle>
+                <CardDescription className="text-base mt-2">
+                  {loading
+                    ? "We're completing the secure handshake with Strava. Keep this tab open."
+                    : isSuccess
+                    ? "Your Strava account is now linked. We'll start syncing your latest efforts in the background."
+                    : "Please retry the connection. If the issue persists, try again in a few minutes."}
+                </CardDescription>
               </div>
             </div>
-            <div className="callback__loading">
-              <span className="callback__loader" aria-hidden="true" />
-              <span>Hang tight—this usually takes less than ten seconds.</span>
-            </div>
-          </>
-        )}
+          </CardHeader>
 
-        {!loading && error && (
-          <div className="callback__status callback__status--error">
-            <span className="callback__status-icon" aria-hidden="true">
-              ⚠️
-            </span>
-            <div className="callback__status-text">
-              <strong>Sign-in failed</strong>
-              <span>
-                {error}{" "}
-                <Link to="/" className="callback__error-link">
-                  Return home and try again
-                </Link>
-                .
-              </span>
-            </div>
-          </div>
-        )}
-
-        {isSuccess && (
-          <>
-            <div className="callback__status callback__status--success">
-              <span className="callback__status-icon" aria-hidden="true">
-                ✅
-              </span>
-              <div className="callback__status-text">
-                <strong>Strava account connected</strong>
-                <span>Your latest activities are syncing now. Feel free to close this tab once you’re ready.</span>
-              </div>
-            </div>
-
-            <div className="callback__details">
-              <div className="callback__grid">
-                <div className="callback__metric">
-                  <span className="callback__metric-label">Athlete</span>
-                  <span className="callback__metric-value">{safeDisplayName}</span>
-                </div>
-                <div className="callback__metric">
-                  <span className="callback__metric-label">Database record</span>
-                  <span className="callback__metric-value">{formattedDbId}</span>
-                </div>
-                <div className="callback__metric">
-                  <span className="callback__metric-label">Next step</span>
-                  <span className="callback__metric-value">Importing recent efforts</span>
+          <CardContent className="space-y-6">
+            {loading && (
+              <div className="space-y-4">
+                <Alert>
+                  <Clock className="h-4 w-4" />
+                  <AlertTitle>Connecting to Strava</AlertTitle>
+                  <AlertDescription>
+                    Authorizing your account and exchanging secure tokens…
+                  </AlertDescription>
+                </Alert>
+                <div className="flex items-center justify-center gap-3 text-slate-600">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Hang tight—this usually takes less than ten seconds.</span>
                 </div>
               </div>
+            )}
 
-              <div className="callback__actions">
-                <Link to="/" className="callback__link">
-                  Go to dashboard (coming soon)
-                </Link>
-                <Link to="/" className="callback__link callback__link--secondary">
-                  Explore the landing page
-                </Link>
-                <span className="callback__id">
-                  Connected as <strong>{safeDisplayName}</strong>
-                  {athlete?.dbId ? ` · record ${formattedDbId}` : ""}
-                </span>
+            {!loading && error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Sign-in failed</AlertTitle>
+                <AlertDescription>
+                  {error}{" "}
+                  <Link to="/" className="underline font-semibold hover:no-underline">
+                    Return home and try again
+                  </Link>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {isSuccess && (
+              <div className="space-y-6">
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-800">Strava account connected</AlertTitle>
+                  <AlertDescription className="text-green-700">
+                    Your latest activities are syncing now. Feel free to close this tab once you're ready.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card className="bg-slate-900 text-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-wider text-slate-400">Athlete</p>
+                        <p className="text-lg font-semibold">{safeDisplayName}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-slate-900 text-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-wider text-slate-400">Database record</p>
+                        <p className="text-lg font-semibold">{formattedDbId}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-slate-900 text-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-wider text-slate-400">Next step</p>
+                        <p className="text-lg font-semibold">Importing recent efforts</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Separator />
+
+                {/* App Explainer Section */}
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">About Strava Roundup</h3>
+                    <p className="text-slate-600 max-w-2xl mx-auto">
+                      Connect your Strava account and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
+                      <h4 className="font-semibold text-slate-900 mb-1">Monthly Analytics</h4>
+                      <p className="text-sm text-slate-600">Month by month miles and minutes spent sweating it out.</p>
+                    </div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
+                      <h4 className="font-semibold text-slate-900 mb-1">Export Ready</h4>
+                      <p className="text-sm text-slate-600">Export-ready highlights that fuel your flex.</p>
+                    </div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
+                      <h4 className="font-semibold text-slate-900 mb-1">Secure Connection</h4>
+                      <p className="text-sm text-slate-600">Read-only connection keeps your Strava data secure</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Action Buttons */}
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready to explore your data?</h3>
+                    <p className="text-slate-600 mb-6">Get started by syncing your activities and viewing your analytics dashboard.</p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button
+                      onClick={handleGetActivities}
+                      className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                      size="lg"
+                    >
+                      Get All Activities
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/')}
+                      className="px-8 py-3 rounded-full"
+                      size="lg"
+                    >
+                      Back to Home
+                    </Button>
+                  </div>
+
+                  <div className="text-center text-sm text-slate-500">
+                    Connected as <strong>{safeDisplayName}</strong>
+                    {athlete?.dbId ? ` · record ${formattedDbId}` : ""}
+                  </div>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </section>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
