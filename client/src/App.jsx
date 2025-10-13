@@ -23,17 +23,15 @@ function Landing() {
       <header className="hero">
         <div className="hero__content">
           <span className="hero__eyebrow">Strava Roundup</span>
-          <h1 className="hero__headline">Your training, visualized in minutes.</h1>
+          <h1 className="hero__headline">Strava Premium Visuals, for free ;)</h1>
           <p className="hero__body">
-            Connect your Strava account and instantly generate a beautiful roundup of your miles, elevation,
-            and breakthrough efforts—perfect for sharing or tracking your goals.
+            Connect your Strava account and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
           </p>
 
           <ul className="hero__features">
-            <li>Automatic mileage, elevation, and time summaries month by month.</li>
-            <li>Spot your strongest streaks with trend lines and personal records.</li>
-            <li>Export-ready highlights for posting anywhere in one click.</li>
-            <li>Read-only connection keeps your Strava data untouched.</li>
+            <li>Month by month miles and minutes spent sweating it out.</li>
+            <li>Export-ready highlights that fuel your flex.</li>
+            <li>Read-only connection keeps your Strava data secure</li>
           </ul>
 
           <div className="hero__actions">
