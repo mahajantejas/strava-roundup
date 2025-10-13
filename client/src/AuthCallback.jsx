@@ -14,6 +14,7 @@ export default function AuthCallback() {
   const status = searchParams.get("status");
   const rawName = searchParams.get("name");
   const dbId = searchParams.get("db_id");
+  const stravaId = searchParams.get("strava_id");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -47,6 +48,7 @@ export default function AuthCallback() {
           lastname,
           displayName: decodedName || firstname || "Strava athlete",
           dbId,
+          stravaId,
         });
         setError(null);
       } else {
@@ -91,7 +93,7 @@ export default function AuthCallback() {
     };
 
     doExchange();
-  }, [status, code, decodedName, dbId]);
+  }, [status, code, decodedName, dbId, stravaId]);
 
   const isSuccess = !loading && !!athlete && !error;
   const safeDisplayName = athlete?.displayName || "Strava athlete";
@@ -102,40 +104,38 @@ export default function AuthCallback() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-white">
-      <div className="w-full max-w-4xl">
-        <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-xl">
-          <CardHeader className="text-center pb-6">
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 py-16 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
+        <Card className="shadow-lg border border-gray-200 bg-white">
+          <CardHeader className="text-center pb-8 pt-8">
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                 {loading ? (
-                  <Loader2 className="w-6 h-6 text-sky-600 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
                 ) : isSuccess ? (
                   <CheckCircle className="w-6 h-6 text-green-600" />
                 ) : (
                   <AlertCircle className="w-6 h-6 text-red-600" />
                 )}
               </div>
-              <div>
-                <CardTitle className="text-2xl sm:text-3xl font-bold text-slate-900">
-                  {loading
-                    ? "Finishing your Strava sign-in"
-                    : isSuccess
-                    ? `Welcome aboard, ${safeDisplayName}!`
-                    : "We hit a snag connecting"}
-                </CardTitle>
-                <CardDescription className="text-base mt-2">
-                  {loading
-                    ? "We're completing the secure handshake with Strava. Keep this tab open."
-                    : isSuccess
-                    ? "Your Strava account is now linked. We'll start syncing your latest efforts in the background."
-                    : "Please retry the connection. If the issue persists, try again in a few minutes."}
-                </CardDescription>
-              </div>
             </div>
+            <CardTitle className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              {loading
+                ? "Finishing your Strava sign-in"
+                : isSuccess
+                ? `Welcome aboard, ${safeDisplayName}!`
+                : "We hit a snag connecting"}
+            </CardTitle>
+            <CardDescription className="text-lg text-gray-600">
+              {loading
+                ? "We're completing the secure handshake with Strava. Keep this tab open."
+                : isSuccess
+                ? "Your Strava account is now linked!"
+                : "Please retry the connection. If the issue persists, try again in a few minutes."}
+            </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8 px-8 pb-8">
             {loading && (
               <div className="space-y-4">
                 <Alert>
@@ -167,79 +167,12 @@ export default function AuthCallback() {
             )}
 
             {isSuccess && (
-              <div className="space-y-6">
-                <Alert className="border-green-200 bg-green-50">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertTitle className="text-green-800">Strava account connected</AlertTitle>
-                  <AlertDescription className="text-green-700">
-                    Your latest activities are syncing now. Feel free to close this tab once you're ready.
-                  </AlertDescription>
-                </Alert>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card className="bg-slate-900 text-white">
-                    <CardContent className="p-4">
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Athlete</p>
-                        <p className="text-lg font-semibold">{safeDisplayName}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-slate-900 text-white">
-                    <CardContent className="p-4">
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Database record</p>
-                        <p className="text-lg font-semibold">{formattedDbId}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-slate-900 text-white">
-                    <CardContent className="p-4">
-                      <div className="space-y-1">
-                        <p className="text-xs uppercase tracking-wider text-slate-400">Next step</p>
-                        <p className="text-lg font-semibold">Importing recent efforts</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Separator />
-
-                {/* App Explainer Section */}
-                <div className="space-y-4">
-                  <div className="text-center">
-                    <h3 className="text-xl font-semibold text-slate-900 mb-2">About Strava Roundup</h3>
-                    <p className="text-slate-600 max-w-2xl mx-auto">
-                      Connect your Strava account and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
-                      <h4 className="font-semibold text-slate-900 mb-1">Monthly Analytics</h4>
-                      <p className="text-sm text-slate-600">Month by month miles and minutes spent sweating it out.</p>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
-                      <h4 className="font-semibold text-slate-900 mb-1">Export Ready</h4>
-                      <p className="text-sm text-slate-600">Export-ready highlights that fuel your flex.</p>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 mx-auto mb-3"></div>
-                      <h4 className="font-semibold text-slate-900 mb-1">Secure Connection</h4>
-                      <p className="text-sm text-slate-600">Read-only connection keeps your Strava data secure</p>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Action Buttons */}
+              <div className="space-y-8">
+                {/* Action Buttons - Moved to top */}
                 <div className="space-y-4">
                   <div className="text-center">
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready to explore your data?</h3>
-                    <p className="text-slate-600 mb-6">Get started by syncing your activities and viewing your analytics dashboard.</p>
+                    <p className="text-slate-600 mb-6"></p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -259,11 +192,79 @@ export default function AuthCallback() {
                       Back to Home
                     </Button>
                   </div>
+                </div>
 
-                  <div className="text-center text-sm text-slate-500">
-                    Connected as <strong>{safeDisplayName}</strong>
-                    {athlete?.dbId ? ` · record ${formattedDbId}` : ""}
+                <Separator />
+
+                {/* App Explainer Section - Updated to match landing page */}
+                <div className="space-y-8">
+                  <div className="text-center">
+                    <h3 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Fuel For Your Social Flex</h3>
+                    <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+                      Connect your activities and generate beautiful roundups of your workouts and breakthrough efforts—perfect for sharing or tracking your goals.
+                    </p>
                   </div>
+
+                  <div className="grid md:grid-cols-3 gap-8">
+                    {/* Advanced Analytics Card */}
+                    <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                          </svg>
+                        </div>
+                        <CardTitle className="text-xl font-semibold text-gray-900">Advanced Analytics</CardTitle>
+                      </div>
+                      <CardContent className="p-0">
+                        <p className="text-gray-600 leading-relaxed">
+                          Dive deep into your performance data with comprehensive charts and graphs.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Export-Ready Highlights Card */}
+                    <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                          <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </div>
+                        <CardTitle className="text-xl font-semibold text-gray-900">Export-Ready Highlights</CardTitle>
+                      </div>
+                      <CardContent className="p-0">
+                        <p className="text-gray-600 leading-relaxed">
+                          Share your accomplishments with your friends and followers on your favorite social media platforms.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Secure Connection Card */}
+                    <Card className="p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                          </svg>
+                        </div>
+                        <CardTitle className="text-xl font-semibold text-gray-900">Secure Connection</CardTitle>
+                      </div>
+                      <CardContent className="p-0">
+                        <p className="text-gray-600 leading-relaxed">
+                          Read-only connection keeps your Strava data secure.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Footer */}
+                <div className="text-center text-sm text-gray-500">
+                  Connected as <strong>{safeDisplayName}</strong>
+                  {athlete?.stravaId ? ` · Strava Id  #${athlete.stravaId}` : ""}
                 </div>
               </div>
             )}

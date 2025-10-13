@@ -83,19 +83,13 @@ def strava_callback(code: str):
     except Exception: 
         # avoid crashing on DB errors: consider logging these
         persisted = None
-    # Return token + athlete info (and persisted DB id if available)
-
-        result["db_id"] = persisted.id
-        name = quote(f"{persisted.firstname} {persisted.lastname}")
-        return RedirectResponse(f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}")
-    
     #After persisting, redirecct the browser to the frontend call back page (absolute url)
     frontend_cb = os.getenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
     if persisted: 
         name = quote(f"{persisted.firstname} {persisted.lastname}").strip()
-        redirect_url = f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}"
+        redirect_url = f"{frontend_cb}?status=success&name={name}&db_id={persisted.id}&strava_id={persisted.strava_id}"
     else:
-        redirect_url
+        redirect_url = f"{frontend_cb}?status=error"
     
     return RedirectResponse(url=redirect_url)
         
