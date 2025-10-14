@@ -15,6 +15,7 @@ export default function AuthCallback() {
   const rawName = searchParams.get("name");
   const dbId = searchParams.get("db_id");
   const stravaId = searchParams.get("strava_id");
+  const image = searchParams.get("image");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,6 +37,9 @@ export default function AuthCallback() {
     if (decodedName) {
       localStorage.setItem('athleteName', decodedName);
     }
+    if (image) {
+      localStorage.setItem('athleteImage', image);
+    }
 
     // Backend already exchanged the code and redirected with a status flag.
     if (status) {
@@ -49,6 +53,7 @@ export default function AuthCallback() {
           displayName: decodedName || firstname || "Strava athlete",
           dbId,
           stravaId,
+          imageUrl: image || null,
         });
         setError(null);
       } else {
@@ -98,6 +103,7 @@ export default function AuthCallback() {
   const isSuccess = !loading && !!athlete && !error;
   const safeDisplayName = athlete?.displayName || "Strava athlete";
   const formattedDbId = athlete?.dbId ? `#${athlete.dbId}` : "Pending assignment";
+  const avatarUrl = athlete?.imageUrl || localStorage.getItem('athleteImage') || '';
 
   const handleGetActivities = () => {
     navigate('/dashboard');
@@ -133,6 +139,17 @@ export default function AuthCallback() {
                 ? "Your Strava account is now linked!"
                 : "Please retry the connection. If the issue persists, try again in a few minutes."}
             </CardDescription>
+            {isSuccess && avatarUrl ? (
+              <div className="mt-6 flex items-center justify-center">
+                <div className="p-1 rounded-full bg-gradient-to-tr from-orange-300 via-rose-300 to-pink-300 hover:from-orange-400 hover:via-rose-400 hover:to-pink-400 transition-colors duration-200">
+                  <img
+                    src={avatarUrl}
+                    alt="Athlete avatar"
+                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-full ring-2 ring-white shadow-md object-cover transform transition-transform duration-200 hover:scale-105"
+                  />
+                </div>
+              </div>
+            ) : null}
           </CardHeader>
 
           <CardContent className="space-y-8 px-8 pb-8">
@@ -262,9 +279,14 @@ export default function AuthCallback() {
                 <Separator />
 
                 {/* Footer */}
-                <div className="text-center text-sm text-gray-500">
-                  Connected as <strong>{safeDisplayName}</strong>
+                <div className="text-center text-sm text-gray-500 flex flex-col items-center gap-2">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Athlete avatar" className="w-16 h-16 rounded-full border border-gray-200" />
+                  ) : null}
+                  <div>
+                    Connected as <strong>{safeDisplayName}</strong>
                   {athlete?.stravaId ? ` · Strava Id  #${athlete.stravaId}` : ""}
+                  </div>
                 </div>
               </div>
             )}
