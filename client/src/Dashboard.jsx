@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 export default function Dashboard() {
   // Get athlete data from localStorage or state
   const athleteName = localStorage.getItem('athleteName') || 'Strava Athlete';
+  const athleteImage = localStorage.getItem('athleteImage') || '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white p-4 sm:p-6 lg:p-8">
@@ -15,13 +16,18 @@ export default function Dashboard() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                Welcome back, {athleteName.split(' ')[0]}!
-              </h1>
-              <p className="text-lg text-slate-600 mt-2">
-                Your Strava analytics dashboard
-              </p>
+            <div className="flex items-center gap-3">
+              {athleteImage ? (
+                <img src={athleteImage} alt="Athlete avatar" className="w-10 h-10 rounded-full border border-gray-200" />
+              ) : null}
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">
+                  Welcome back, {athleteName.split(' ')[0]}!
+                </h1>
+                <p className="text-lg text-slate-600 mt-2">
+                  Your Strava analytics dashboard
+                </p>
+              </div>
             </div>
             <Badge variant="secondary" className="text-sky-600 bg-sky-50 border-sky-200">
               Connected
