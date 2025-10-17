@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Link } from "react-router-dom";
 import { CalendarDays, Clock, Mountain, Share2, TrendingUp } from "lucide-react";
 
 const metricOptions = {
@@ -30,6 +29,12 @@ const monthSummaries = [
     longestRun: 20.6,
     bestPace: "4:38 /km",
     longestRide: 57.8,
+    totalActivities: 28,
+    activityBreakdown: {
+      run: 14,
+      ride: 6,
+      training: 8,
+    },
   },
   {
     id: "2024-10",
@@ -43,6 +48,12 @@ const monthSummaries = [
     longestRun: 19.7,
     bestPace: "4:40 /km",
     longestRide: 52.4,
+    totalActivities: 24,
+    activityBreakdown: {
+      run: 11,
+      ride: 5,
+      training: 8,
+    },
   },
   {
     id: "2024-09",
@@ -56,6 +67,12 @@ const monthSummaries = [
     longestRun: 18.4,
     bestPace: "4:42 /km",
     longestRide: 54.2,
+    totalActivities: 26,
+    activityBreakdown: {
+      run: 12,
+      ride: 6,
+      training: 8,
+    },
   },
 ];
 
@@ -113,6 +130,10 @@ export default function Dashboard() {
 
   const chartData = timeframe === "month" ? rollingWeeks : monthlyTrend;
   const labels = chartData.map((item) => item.label);
+  const activityEntries = Object.entries(selectedMonth.activityBreakdown ?? {});
+  const totalActivities =
+    selectedMonth.totalActivities ??
+    activityEntries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
   const selectedMetricValues = useMemo(
     () => chartData.map((item) => Number(item[metric] || 0)),
     [chartData, metric],
@@ -311,7 +332,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
                       <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
                         <span>Hours</span>
@@ -341,6 +362,26 @@ export default function Dashboard() {
                         {Math.round(selectedMonth.totalElevation)}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">Meters climbed</p>
+                    </div>
+                    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
+                        <span>Activities</span>
+                        <CalendarDays className="h-4 w-4 text-orange-500" />
+                      </div>
+                      <p className="mt-5 text-3xl font-semibold text-slate-900">{totalActivities}</p>
+                      <p className="mt-1 text-xs text-slate-500">Logged this month</p>
+                      <div className="mt-4 space-y-1 text-xs text-slate-500">
+                        {activityEntries.length > 0 ? (
+                          activityEntries.map(([type, count]) => (
+                            <div key={type} className="flex justify-between capitalize text-slate-600">
+                              <span>{type}</span>
+                              <span>{count}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-slate-400">Breakdown coming soon</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -466,37 +507,9 @@ export default function Dashboard() {
                       </g>
                     ))}
                   </svg>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-600 sm:grid-cols-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Latest</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {selectedMetricSummary.last.toFixed(1)} {shareMetricDescriptor.unit}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Total</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {selectedMetricSummary.total.toFixed(1)} {shareMetricDescriptor.unit}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Change</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {selectedMetricSummary.delta >= 0 ? "+" : ""}
-                        {selectedMetricSummary.delta.toFixed(1)} {shareMetricDescriptor.unit}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Average</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {(selectedMetricSummary.total / selectedMetricValues.length).toFixed(1)}{" "}
-                        {shareMetricDescriptor.unit}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid grid-cols-2 gap-4 text-xs font-medium uppercase tracking-[0.35em] text-slate-400 sm:grid-cols-4">
+                  <div className="mt-6 flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-[0.35em] text-slate-400">
                     {labels.map((label) => (
-                      <span key={label} className="text-center text-slate-500">
+                      <span key={label} className="flex-1 min-w-0 text-center text-slate-500">
                         {label}
                       </span>
                     ))}
@@ -552,17 +565,22 @@ export default function Dashboard() {
                   Quick actions
                 </CardTitle>
                 <CardDescription className="text-slate-500">
-                  Jump straight into your favorite exports.
+                  Jump straight into your favorite follow-up actions.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full rounded-full border border-slate-200 bg-orange-500 text-white shadow-sm hover:bg-orange-600">
+                <Button
+                  onClick={handleShare}
+                  disabled={isSharing}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-orange-500 text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <Share2 className="h-4 w-4" />
+                  {isSharing ? "Creating image…" : "Share snapshot"}
+                </Button>
+                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
                   Sync Activities
                 </Button>
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
-                  Generate Report
-                </Button>
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
                   Export Data
                 </Button>
               </CardContent>
@@ -571,18 +589,37 @@ export default function Dashboard() {
             <Card className="border border-slate-200 bg-white shadow-md shadow-slate-200/40">
               <CardHeader>
                 <CardTitle className="text-slate-900">Navigation</CardTitle>
+                <CardDescription className="text-slate-500">
+                  Quick links to manage your account.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Link to="/">
-                  <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
-                    Back to Home
-                  </Button>
-                </Link>
-                <Link to="/auth/callback">
-                  <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
-                    Account Settings
-                  </Button>
-                </Link>
+                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
+                  Log out
+                </Button>
+                <Button className="w-full rounded-full border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100">
+                  Delete Account
+                </Button>
+                <Button className="w-full rounded-full border border-slate-200 bg-orange-50 text-orange-600 transition hover:bg-orange-100">
+                  Invite a friend
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-slate-200 bg-white shadow-md shadow-slate-200/40">
+              <CardHeader>
+                <CardTitle className="text-slate-900">Give a compliment</CardTitle>
+                <CardDescription className="text-slate-500">
+                  Give the builders a shout or share feedback for what comes next.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button className="w-full rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100">
+                  Give a compliment
+                </Button>
+                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+                  Give feedback
+                </Button>
               </CardContent>
             </Card>
           </div>
