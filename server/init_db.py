@@ -1,5 +1,5 @@
 from database import Base, engine
-from models import Athlete
+from models import Athlete, Activity
 from sqlalchemy import text
 
 print("Creating database tables...")
