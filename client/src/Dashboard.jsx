@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CalendarDays, Clock, Mountain, Share2, TrendingUp } from "lucide-react";
+import { AlertCircle, CalendarDays, Clock, Loader2, Mountain, Share2, TrendingUp } from "lucide-react";
+import { useActivitySync } from "@/hooks/useActivitySync";
 
 const metricOptions = {
   distance: { label: "Distance", unit: "km" },
@@ -111,11 +112,18 @@ const typeStyles = {
 export default function Dashboard() {
   const athleteName = localStorage.getItem("athleteName") || "Strava Athlete";
   const athleteImage = localStorage.getItem("athleteImage") || "";
+  const athleteId = typeof window !== "undefined" ? localStorage.getItem("athleteId") : null;
 
   const [metric, setMetric] = useState("distance");
   const [timeframe, setTimeframe] = useState("quarter");
   const [selectedMonthId, setSelectedMonthId] = useState(monthSummaries[0].id);
   const [isSharing, setIsSharing] = useState(false);
+  const {
+    syncState: dashboardSyncState,
+    triggerSync: triggerDashboardSync,
+    isSyncing: isDashboardSyncing,
+  } = useActivitySync(athleteId, { auto: true });
+  const dashboardSyncSummary = dashboardSyncState.summary;
 
   const posterRef = useRef(null);
 
@@ -243,6 +251,67 @@ export default function Dashboard() {
       setIsSharing(false);
     }
   };
+
+  const handleSyncActivities = async () => {
+    if (!athleteId) {
+      return;
+    }
+    try {
+      await triggerDashboardSync();
+    } catch (err) {
+      // errors surface via dashboardSyncState
+    }
+  };
+
+  if (!athleteId) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-white via-slate-50 to-slate-100 px-6 text-center text-slate-700">
+        <h1 className="text-3xl font-semibold text-slate-900">Connect your Strava account</h1>
+        <p className="mt-4 max-w-md text-sm text-slate-500">
+          We could not find an athlete profile. Return to the home page and connect your Strava account to see
+          your roundup dashboard.
+        </p>
+        <Button
+          className="mt-6 rounded-full bg-orange-500 px-6 py-2 text-white shadow-lg hover:bg-orange-600"
+          onClick={() => window.location.assign("/")}
+        >
+          Back to home
+        </Button>
+      </div>
+    );
+  }
+
+  if (dashboardSyncState.status === "loading") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-white via-slate-50 to-slate-100 px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full border border-orange-200 bg-orange-50">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold text-slate-900">Sync in progress</h1>
+        <p className="mt-2 max-w-sm text-sm text-slate-500">
+          We are pulling the latest activities from Strava. Your dashboard will appear shortly.
+        </p>
+      </div>
+    );
+  }
+
+  if (dashboardSyncState.status === "error") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-white via-slate-50 to-slate-100 px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-200 bg-red-50">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold text-slate-900">Sync failed</h1>
+        <p className="mt-2 max-w-sm text-sm text-slate-500">{dashboardSyncState.error}</p>
+        <Button
+          className="mt-6 rounded-full bg-orange-500 px-6 py-2 text-white shadow-lg hover:bg-orange-600"
+          onClick={handleSyncActivities}
+        >
+          Retry sync
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-slate-100 text-slate-900">
@@ -577,9 +646,31 @@ export default function Dashboard() {
                   <Share2 className="h-4 w-4" />
                   {isSharing ? "Creating image…" : "Share snapshot"}
                 </Button>
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
-                  Sync Activities
+                <Button
+                  onClick={handleSyncActivities}
+                  disabled={!athleteId || isDashboardSyncing}
+                  className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-80"
+                >
+                  {isDashboardSyncing ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Syncing…
+                    </span>
+                  ) : (
+                    "Sync Activities"
+                  )}
                 </Button>
+                {dashboardSyncState.status === "success" && dashboardSyncSummary ? (
+                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-600">
+                    Last synced {new Date(dashboardSyncSummary.synced_at).toLocaleString()} ·{" "}
+                    {dashboardSyncSummary.fetched} fetched
+                  </p>
+                ) : null}
+                {dashboardSyncState.status === "error" ? (
+                  <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-center text-xs text-red-600">
+                    {dashboardSyncState.error}
+                  </p>
+                ) : null}
                 <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
                   Export Data
                 </Button>
