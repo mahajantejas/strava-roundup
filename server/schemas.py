@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from typing import List, Optional
 from pydantic import BaseModel
 
 class AthleteBase(BaseModel):
@@ -52,3 +52,55 @@ class SyncSummary(BaseModel):
     updated: int
     latest_activity: Optional[datetime] = None
     synced_at: datetime
+
+
+class ActivitySplitEntry(BaseModel):
+    type: str
+    count: int
+    percentage: float
+
+
+class CalendarDayEntry(BaseModel):
+    day: int
+    date: date
+    is_active: bool
+    total_activities: int
+    total_distance_km: float
+    total_moving_time_seconds: int
+
+
+class MostActiveDay(BaseModel):
+    date: date
+    total_activities: int
+    total_distance_km: float
+    total_moving_time_seconds: int
+
+
+class MostActiveTimeOfDay(BaseModel):
+    hour: int
+    total_activities: int
+    total_moving_time_seconds: int
+
+
+class MonthlyInsights(BaseModel):
+    most_active_day: Optional[MostActiveDay]
+    most_active_time_of_day: Optional[MostActiveTimeOfDay]
+    average_activity_time_seconds: Optional[int]
+    weekly_streak_weeks: int
+
+
+class MonthlyRoundup(BaseModel):
+    athlete_id: int
+    month: str
+    month_name: str
+    month_label: str
+    period_start: datetime
+    period_end: datetime
+    total_active_days: int
+    total_activities: int
+    total_distance_km: float
+    total_moving_time_seconds: int
+    total_elevation_gain_m: float
+    activity_split: List[ActivitySplitEntry]
+    calendar_days: List[CalendarDayEntry]
+    insights: MonthlyInsights

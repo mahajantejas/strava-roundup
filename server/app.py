@@ -9,7 +9,8 @@ from auth import router as auth_router
 from database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
 from models import Athlete
-from schemas import AthleteCreate, AthleteResponse, SyncSummary
+from monthly_roundup import build_monthly_roundup
+from schemas import AthleteCreate, AthleteResponse, MonthlyRoundup, SyncSummary
 from strava_client import StravaAuthenticationError, StravaClientError
 
 
@@ -79,3 +80,20 @@ def sync_athlete(
         raise HTTPException(status_code=502, detail=str(exc))
 
     return summary
+
+
+@app.get("/athletes/{athlete_id}/roundup", response_model=MonthlyRoundup)
+def get_monthly_roundup(
+    athlete_id: int,
+    month: Optional[str] = Query(
+        None,
+        description="Optional month in YYYY-MM format. Defaults to the current month (UTC).",
+    ),
+    db: Session = Depends(get_db),
+):
+    try:
+        return build_monthly_roundup(db, athlete_id, month)
+    except AthleteNotFoundError:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
