@@ -17,6 +17,8 @@ def sync_athlete_activities(
     athlete_id: int,
     since: Optional[datetime] = None,
 ) -> SyncSummary:
+    baseline = datetime(2025, 1, 1, tzinfo=timezone.utc)
+
     athlete = db.query(Athlete).filter(Athlete.id == athlete_id).first()
     if not athlete:
         raise AthleteNotFoundError(f"Athlete {athlete_id} was not found")
@@ -32,6 +34,10 @@ def sync_athlete_activities(
         if latest_existing:
             # Strava's `after` parameter is exclusive, subtract a minute to avoid missing updates.
             since_cutoff = latest_existing.start_date - timedelta(minutes=1)
+
+    # Ensure we never pull data before the start of 2025.
+    if since_cutoff is None or since_cutoff < baseline:
+        since_cutoff = baseline
 
     client = StravaClient(db, athlete)
 

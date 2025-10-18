@@ -3,9 +3,9 @@ import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, AlertCircle, Clock, Loader2 } from "lucide-react";
+import { useActivitySync } from "@/hooks/useActivitySync";
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -20,6 +20,11 @@ export default function AuthCallback() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [athlete, setAthlete] = useState(null);
+  const athleteId = athlete?.dbId || dbId;
+  const canAutoSync = Boolean(athleteId) && !loading && !error;
+  const { syncState } = useActivitySync(athleteId, {
+    auto: canAutoSync,
+  });
 
   const decodedName = useMemo(() => {
     if (!rawName) {
@@ -35,10 +40,16 @@ export default function AuthCallback() {
   useEffect(() => {
     // Store athlete name in localStorage for dashboard
     if (decodedName) {
-      localStorage.setItem('athleteName', decodedName);
+      localStorage.setItem("athleteName", decodedName);
     }
     if (image) {
-      localStorage.setItem('athleteImage', image);
+      localStorage.setItem("athleteImage", image);
+    }
+    if (dbId) {
+      localStorage.setItem("athleteId", dbId);
+    }
+    if (stravaId) {
+      localStorage.setItem("stravaId", stravaId);
     }
 
     // Backend already exchanged the code and redirected with a status flag.
@@ -89,6 +100,7 @@ export default function AuthCallback() {
           lastname: body?.athlete?.lastname,
           displayName: [body?.athlete?.firstname, body?.athlete?.lastname].filter(Boolean).join(" "),
           dbId: body?.db_id,
+          stravaId: body?.athlete?.strava_id,
         });
       } catch (err) {
         setError(err.message || "Sign-in failed");
@@ -100,13 +112,28 @@ export default function AuthCallback() {
     doExchange();
   }, [status, code, decodedName, dbId, stravaId]);
 
+  useEffect(() => {
+    if (!athlete) {
+      return;
+    }
+    if (athlete.dbId) {
+      localStorage.setItem("athleteId", athlete.dbId);
+    }
+    if (athlete.stravaId) {
+      localStorage.setItem("stravaId", athlete.stravaId);
+    }
+  }, [athlete]);
+
   const isSuccess = !loading && !!athlete && !error;
   const safeDisplayName = athlete?.displayName || "Strava athlete";
-  const formattedDbId = athlete?.dbId ? `#${athlete.dbId}` : "Pending assignment";
-  const avatarUrl = athlete?.imageUrl || localStorage.getItem('athleteImage') || '';
+  const avatarUrl = athlete?.imageUrl || localStorage.getItem("athleteImage") || "";
+  const syncSummary = syncState.summary;
+  const syncingMessage =
+    syncState.status === "loading" ? "Sync in progress — pulling your latest Strava activities…" : null;
+  const syncErrorMessage = syncState.status === "error" ? syncState.error : null;
 
-  const handleGetActivities = () => {
-    navigate('/dashboard');
+  const handleGoToDashboard = () => {
+    navigate("/dashboard");
   };
 
   return (
@@ -194,11 +221,12 @@ export default function AuthCallback() {
 
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Button
-                      onClick={handleGetActivities}
-                      className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                      onClick={handleGoToDashboard}
+                      disabled={!athleteId}
+                      className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
                       size="lg"
                     >
-                      Get All Activities
+                      Go to dashboard
                     </Button>
                     <Button
                       variant="outline"
@@ -210,6 +238,27 @@ export default function AuthCallback() {
                     </Button>
                   </div>
                 </div>
+
+                {syncingMessage ? (
+                  <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-orange-200 bg-orange-50/60 px-4 py-3 text-sm text-orange-600 transition duration-200 animate-pulse">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{syncingMessage}</span>
+                  </div>
+                ) : null}
+
+                {syncErrorMessage ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>Sync failed</AlertTitle>
+                    <AlertDescription>{syncErrorMessage}</AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {syncState.status === "success" && syncSummary ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm text-slate-600 transition-opacity duration-300">
+                    Synced {syncSummary.fetched} activities at{" "}
+                    {new Date(syncSummary.synced_at).toLocaleString()}.
+                  </div>
+                ) : null}
 
                 <Separator />
 

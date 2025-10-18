@@ -28,8 +28,8 @@ def test_normalize_activity_payload_converts_units():
         "id": 123,
         "name": "Morning Run",
         "type": "Run",
-        "start_date": "2024-01-02T06:30:00Z",
-        "start_date_local": "2024-01-02T07:30:00+01:00",
+        "start_date": "2025-01-02T06:30:00Z",
+        "start_date_local": "2025-01-02T07:30:00+01:00",
         "timezone": "(GMT+01:00) Europe/Berlin",
         "distance": 5234.5,
         "moving_time": 1500,
@@ -69,8 +69,8 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
             "id": 1001,
             "name": "Morning Run",
             "type": "Run",
-            "start_date": "2024-01-01T06:00:00Z",
-            "start_date_local": "2024-01-01T07:00:00+01:00",
+            "start_date": "2025-01-01T06:00:00Z",
+            "start_date_local": "2025-01-01T07:00:00+01:00",
             "timezone": "(GMT+01:00) Europe/Berlin",
             "distance": 10000,
             "moving_time": 2400,
@@ -83,8 +83,8 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
             "id": 1002,
             "name": "Lunch Ride",
             "type": "Ride",
-            "start_date": "2024-01-02T12:30:00Z",
-            "start_date_local": "2024-01-02T13:30:00+01:00",
+            "start_date": "2025-01-02T12:30:00Z",
+            "start_date_local": "2025-01-02T13:30:00+01:00",
             "timezone": "(GMT+01:00) Europe/Berlin",
             "distance": 25000,
             "moving_time": 3600,
@@ -134,7 +134,7 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
     assert summary.fetched == 2
     assert summary.created == 2
     assert summary.updated == 0
-    assert summary.latest_activity == datetime(2024, 1, 2, 12, 30, tzinfo=timezone.utc)
+    assert summary.latest_activity == datetime(2025, 1, 2, 12, 30, tzinfo=timezone.utc)
 
     stored = (
         db_session.query(Activity)
@@ -162,8 +162,8 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
             "id": 1003,
             "name": "Evening Run",
             "type": "Run",
-            "start_date": "2024-01-03T18:00:00Z",
-            "start_date_local": "2024-01-03T19:00:00+01:00",
+            "start_date": "2025-01-03T18:00:00Z",
+            "start_date_local": "2025-01-03T19:00:00+01:00",
             "timezone": "(GMT+01:00) Europe/Berlin",
             "distance": 8000,
             "moving_time": 2100,
@@ -183,7 +183,7 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
     assert summary_next.fetched == 2  # updated + new
     assert summary_next.created == 1
     assert summary_next.updated == 1
-    assert summary_next.latest_activity == datetime(2024, 1, 3, 18, 0, tzinfo=timezone.utc)
+    assert summary_next.latest_activity == datetime(2025, 1, 3, 18, 0, tzinfo=timezone.utc)
 
     updated_activity = (
         db_session.query(Activity)
