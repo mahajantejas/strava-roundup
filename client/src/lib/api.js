@@ -40,3 +40,33 @@ export async function syncAthleteActivities(athleteId, options = {}) {
 
   return response.json();
 }
+
+export async function fetchMonthlyRoundup(athleteId, options = {}) {
+  if (!athleteId) {
+    throw new Error("Missing athlete identifier");
+  }
+
+  const params = new URLSearchParams();
+  if (options.month) {
+    params.set("month", options.month);
+  }
+
+  const url = buildUrl(
+    `/athletes/${athleteId}/roundup${params.toString() ? `?${params}` : ""}`,
+  );
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Fetch failed (${response.status}): ${text}`);
+  }
+
+  return response.json();
+}

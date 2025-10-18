@@ -1,181 +1,298 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CalendarDays, Clock, Loader2, Mountain, Share2, TrendingUp } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCcw, Share2 } from "lucide-react";
 import { useActivitySync } from "@/hooks/useActivitySync";
+import { fetchMonthlyRoundup } from "@/lib/api";
 
-const metricOptions = {
-  distance: { label: "Distance", unit: "km" },
-  time: { label: "Moving Time", unit: "hrs" },
-  elevation: { label: "Elevation Gain", unit: "m" },
-};
+const sharePosterSize = { width: 960, height: 540 };
+const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const timeframeOptions = {
-  month: { label: "Last 4 Weeks" },
-  quarter: { label: "Last 6 Months" },
-};
+function getMonthParam(date = new Date()) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
 
-const monthSummaries = [
-  {
-    id: "2024-11",
-    label: "November 2024",
-    monthName: "November",
-    streakWeeks: 15,
-    daysActive: 16,
-    totalDistance: 166.9,
-    totalTime: 20.1,
-    totalElevation: 1524,
-    longestRun: 20.6,
-    bestPace: "4:38 /km",
-    longestRide: 57.8,
-    totalActivities: 28,
-    activityBreakdown: {
-      run: 14,
-      ride: 6,
-      training: 8,
+function buildEmptyRoundup(monthParam) {
+  const baseDate = (() => {
+    if (typeof monthParam === "string") {
+      const [yearStr, monthStr] = monthParam.split("-");
+      const year = Number(yearStr);
+      const monthIndex = Number(monthStr) - 1;
+      if (!Number.isNaN(year) && !Number.isNaN(monthIndex)) {
+        return new Date(Date.UTC(year, monthIndex, 1));
+      }
+    }
+    return new Date();
+  })();
+
+  const year = baseDate.getUTCFullYear();
+  const monthIndex = baseDate.getUTCMonth();
+  const nextMonth = new Date(Date.UTC(year, monthIndex + 1, 1));
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+
+  const calendarDays = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const dayDate = new Date(Date.UTC(year, monthIndex, day));
+    return {
+      day,
+      date: dayDate.toISOString().slice(0, 10),
+      is_active: false,
+      total_activities: 0,
+      total_distance_km: 0,
+      total_moving_time_seconds: 0,
+    };
+  });
+
+  const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long" });
+  const monthLabelFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+
+  return {
+    athlete_id: null,
+    month: getMonthParam(baseDate),
+    month_name: monthFormatter.format(baseDate),
+    month_label: monthLabelFormatter.format(baseDate),
+    period_start: new Date(Date.UTC(year, monthIndex, 1)).toISOString(),
+    period_end: nextMonth.toISOString(),
+    total_active_days: 0,
+    total_activities: 0,
+    total_distance_km: 0,
+    total_moving_time_seconds: 0,
+    total_elevation_gain_m: 0,
+    activity_split: [],
+    calendar_days: calendarDays,
+    insights: {
+      most_active_day: null,
+      most_active_time_of_day: null,
+      average_activity_time_seconds: null,
+      weekly_streak_weeks: 0,
     },
-  },
-  {
-    id: "2024-10",
-    label: "October 2024",
-    monthName: "October",
-    streakWeeks: 14,
-    daysActive: 15,
-    totalDistance: 148.2,
-    totalTime: 18.3,
-    totalElevation: 1318,
-    longestRun: 19.7,
-    bestPace: "4:40 /km",
-    longestRide: 52.4,
-    totalActivities: 24,
-    activityBreakdown: {
-      run: 11,
-      ride: 5,
-      training: 8,
-    },
-  },
-  {
-    id: "2024-09",
-    label: "September 2024",
-    monthName: "September",
-    streakWeeks: 13,
-    daysActive: 14,
-    totalDistance: 160.5,
-    totalTime: 19.0,
-    totalElevation: 706,
-    longestRun: 18.4,
-    bestPace: "4:42 /km",
-    longestRide: 54.2,
-    totalActivities: 26,
-    activityBreakdown: {
-      run: 12,
-      ride: 6,
-      training: 8,
-    },
-  },
-];
+  };
+}
 
-const monthlyTrend = [
-  { id: "2024-06", label: "Jun", distance: 142.3, time: 16.8, elevation: 1180 },
-  { id: "2024-07", label: "Jul", distance: 156.1, time: 18.2, elevation: 1345 },
-  { id: "2024-08", label: "Aug", distance: 173.4, time: 19.4, elevation: 1492 },
-  { id: "2024-09", label: "Sep", distance: 160.5, time: 19.0, elevation: 1426 },
-  { id: "2024-10", label: "Oct", distance: 148.2, time: 18.3, elevation: 1318 },
-  { id: "2024-11", label: "Nov", distance: 166.9, time: 20.1, elevation: 1524 },
-];
+function buildCalendarCells(calendarDays) {
+  if (!Array.isArray(calendarDays) || calendarDays.length === 0) {
+    return [];
+  }
 
-const rollingWeeks = [
-  { label: "Week 1", distance: 37.2, time: 4.6, elevation: 168 },
-  { label: "Week 2", distance: 41.8, time: 4.9, elevation: 182 },
-  { label: "Week 3", distance: 39.5, time: 4.7, elevation: 175 },
-  { label: "Week 4", distance: 42.0, time: 5.0, elevation: 181 },
-];
+  const firstDate = new Date(`${calendarDays[0].date}T00:00:00Z`);
+  const mondayBasedWeekday = (firstDate.getUTCDay() + 6) % 7;
+  const cells = [];
 
-const weeklyLog = [
-  { day: "M", label: "Mon", distance: 0, time: 0, type: null },
-  { day: "T", label: "Tue", distance: 6.4, time: 0.9, type: "run" },
-  { day: "W", label: "Wed", distance: 0, time: 0, type: null },
-  { day: "T", label: "Thu", distance: 8.3, time: 1.1, type: "run" },
-  { day: "F", label: "Fri", distance: 6.8, time: 0.8, type: "training" },
-  { day: "S", label: "Sat", distance: 14.6, time: 1.8, type: "ride" },
-  { day: "S", label: "Sun", distance: 12.3, time: 1.2, type: "run" },
-];
+  for (let index = 0; index < mondayBasedWeekday; index += 1) {
+    cells.push({ key: `blank-start-${index}`, day: null, active: false });
+  }
 
-const typeStyles = {
-  run: "border-orange-200 bg-orange-100 text-orange-600",
-  ride: "border-emerald-200 bg-emerald-100 text-emerald-600",
-  training: "border-indigo-200 bg-indigo-100 text-indigo-600",
-};
+  calendarDays.forEach((entry) => {
+    cells.push({
+      key: `day-${entry.day}`,
+      day: entry.day,
+      active: entry.is_active,
+      stats: entry,
+    });
+  });
+
+  while (cells.length % 7 !== 0) {
+    cells.push({ key: `blank-end-${cells.length}`, day: null, active: false });
+  }
+
+  return cells;
+}
+
+function formatDuration(seconds) {
+  if (!seconds) {
+    return "0h 0m";
+  }
+  const safeSeconds = Math.max(Number(seconds) || 0, 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.round((safeSeconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
+function formatDistance(km) {
+  if (!km) {
+    return "0 km";
+  }
+  const rounded = Math.round(Number(km) * 10) / 10;
+  return `${rounded.toFixed(1)} km`;
+}
+
+function formatElevation(meters) {
+  if (!meters) {
+    return "0 m";
+  }
+  return `${Math.round(Number(meters))} m`;
+}
+
+function formatDateLabel(isoDate) {
+  if (!isoDate) {
+    return "";
+  }
+  const formatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  return formatter.format(date);
+}
+
+function formatHourLabel(hour) {
+  if (typeof hour !== "number") {
+    return "";
+  }
+  const formatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+  const baseDate = new Date(Date.UTC(1970, 0, 1, hour, 0));
+  return formatter.format(baseDate);
+}
+
+function formatWeeklyStreak(weeks) {
+  if (!weeks) {
+    return "No active weeks yet";
+  }
+  return `${weeks} week${weeks === 1 ? "" : "s"}`;
+}
 
 export default function Dashboard() {
-  const athleteName = localStorage.getItem("athleteName") || "Strava Athlete";
-  const athleteImage = localStorage.getItem("athleteImage") || "";
+  const athleteName = (typeof window !== "undefined" && localStorage.getItem("athleteName")) || "Strava Athlete";
+  const athleteImage = (typeof window !== "undefined" && localStorage.getItem("athleteImage")) || "";
   const athleteId = typeof window !== "undefined" ? localStorage.getItem("athleteId") : null;
 
-  const [metric, setMetric] = useState("distance");
-  const [timeframe, setTimeframe] = useState("quarter");
-  const [selectedMonthId, setSelectedMonthId] = useState(monthSummaries[0].id);
   const [isSharing, setIsSharing] = useState(false);
+  const [roundupData, setRoundupData] = useState(null);
+  const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
+  const [roundupError, setRoundupError] = useState(null);
+
+  const monthParam = useMemo(() => getMonthParam(new Date()), []);
+  const fallbackRoundup = useMemo(() => buildEmptyRoundup(monthParam), [monthParam]);
+  const monthlyRoundup = roundupData ?? fallbackRoundup;
+
+  const totalMovingTimeHours = monthlyRoundup.total_moving_time_seconds / 3600;
+  const totalMovingTimeDisplay = formatDuration(monthlyRoundup.total_moving_time_seconds);
+  const totalMovingTimeHoursRounded = Number.isFinite(totalMovingTimeHours)
+    ? Math.round(totalMovingTimeHours * 10) / 10
+    : 0;
+
+  const splitWithPercentages = useMemo(() => {
+    if (!monthlyRoundup.activity_split) {
+      return [];
+    }
+    return monthlyRoundup.activity_split.map((entry) => ({
+      ...entry,
+      percentage: Math.round((entry.percentage ?? 0) * 10) / 10,
+    }));
+  }, [monthlyRoundup.activity_split]);
+
+  const calendarCells = useMemo(
+    () => buildCalendarCells(monthlyRoundup.calendar_days),
+    [monthlyRoundup.calendar_days],
+  );
+
   const {
     syncState: dashboardSyncState,
     triggerSync: triggerDashboardSync,
     isSyncing: isDashboardSyncing,
   } = useActivitySync(athleteId, { auto: true });
-  const dashboardSyncSummary = dashboardSyncState.summary;
 
   const posterRef = useRef(null);
 
-  const sharePosterSize = { width: 960, height: 540 };
-  const chartConfig = { width: 560, height: 220, padding: 28 };
-  const shareChartConfig = { width: 760, height: 240, padding: 44 };
-
-  const selectedMonth = useMemo(
-    () => monthSummaries.find((entry) => entry.id === selectedMonthId) ?? monthSummaries[0],
-    [selectedMonthId],
+  const summaryCards = useMemo(
+    () => [
+      {
+        id: "activeDays",
+        label: "Total active days",
+        primary: isLoadingRoundup ? "…" : monthlyRoundup.total_active_days,
+        caption: "Days with at least one activity",
+      },
+      {
+        id: "activities",
+        label: "Total activities",
+        primary: isLoadingRoundup ? "…" : monthlyRoundup.total_activities,
+        caption: "Workouts logged across the month",
+      },
+      {
+        id: "distance",
+        label: "Total kms",
+        primary: isLoadingRoundup ? "…" : formatDistance(monthlyRoundup.total_distance_km),
+        caption: `${monthlyRoundup.month_name} distance`,
+      },
+      {
+        id: "movingTime",
+        label: "Total moving time",
+        primary: isLoadingRoundup ? "…" : totalMovingTimeDisplay,
+        caption: isLoadingRoundup
+          ? "Loading moving time"
+          : `${totalMovingTimeHoursRounded.toFixed(1)} hrs spent moving`,
+      },
+      {
+        id: "elevation",
+        label: "Total elevation gained",
+        primary: isLoadingRoundup ? "…" : formatElevation(monthlyRoundup.total_elevation_gain_m),
+        caption: "Elevation climbed this month",
+      },
+      {
+        id: "activitySplit",
+        label: "Split of activities",
+        type: "split",
+        caption: isLoadingRoundup ? "Loading activity split" : "Rounded share for each activity type",
+      },
+    ],
+    [
+      isLoadingRoundup,
+      monthlyRoundup.month_name,
+      monthlyRoundup.total_activities,
+      monthlyRoundup.total_active_days,
+      monthlyRoundup.total_distance_km,
+      monthlyRoundup.total_elevation_gain_m,
+      totalMovingTimeDisplay,
+      totalMovingTimeHoursRounded,
+    ],
   );
 
-  const chartData = timeframe === "month" ? rollingWeeks : monthlyTrend;
-  const labels = chartData.map((item) => item.label);
-  const activityEntries = Object.entries(selectedMonth.activityBreakdown ?? {});
-  const totalActivities =
-    selectedMonth.totalActivities ??
-    activityEntries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
-  const selectedMetricValues = useMemo(
-    () => chartData.map((item) => Number(item[metric] || 0)),
-    [chartData, metric],
-  );
-
-  const selectedMetricSummary = useMemo(() => {
-    if (selectedMetricValues.length === 0) {
-      return { last: 0, previous: 0, delta: 0, total: 0 };
+  const loadMonthlyRoundup = useCallback(async () => {
+    if (!athleteId) {
+      return;
     }
-    const last = selectedMetricValues.at(-1) ?? 0;
-    const previous =
-      selectedMetricValues.length > 1
-        ? selectedMetricValues[selectedMetricValues.length - 2]
-        : last;
-    const delta = last - previous;
-    const total = selectedMetricValues.reduce((sum, value) => sum + value, 0);
-    return { last, previous, delta, total };
-  }, [selectedMetricValues]);
+    setIsLoadingRoundup(true);
+    setRoundupError(null);
+    try {
+      const response = await fetchMonthlyRoundup(athleteId, { month: monthParam });
+      setRoundupData(response);
+    } catch (error) {
+      console.error(error);
+      setRoundupData(null);
+      setRoundupError(error?.message || "We could not load the monthly roundup");
+    } finally {
+      setIsLoadingRoundup(false);
+    }
+  }, [athleteId, monthParam]);
 
-  const chartGeometry = useMemo(
-    () => buildChartGeometry(selectedMetricValues, chartConfig.width, chartConfig.height, chartConfig.padding),
-    [selectedMetricValues, chartConfig.height, chartConfig.padding, chartConfig.width],
-  );
+  useEffect(() => {
+    if (!athleteId) {
+      return;
+    }
+    loadMonthlyRoundup();
+  }, [athleteId, loadMonthlyRoundup]);
 
-  const shareGeometry = useMemo(
-    () => buildChartGeometry(selectedMetricValues, shareChartConfig.width, shareChartConfig.height, shareChartConfig.padding),
-    [selectedMetricValues, shareChartConfig.height, shareChartConfig.padding, shareChartConfig.width],
-  );
+  useEffect(() => {
+    if (!athleteId) {
+      return;
+    }
+    if (dashboardSyncState.summary?.synced_at) {
+      loadMonthlyRoundup();
+    }
+  }, [athleteId, dashboardSyncState.summary?.synced_at, loadMonthlyRoundup]);
 
-  const shareMetricDescriptor = metricOptions[metric];
-  const changePercentage =
-    selectedMetricSummary.previous > 0
-      ? (selectedMetricSummary.delta / selectedMetricSummary.previous) * 100
-      : 0;
+  const syncedAt = dashboardSyncState?.summary?.synced_at;
+  let lastSyncedLabel = null;
+  if (syncedAt) {
+    const parsed = new Date(syncedAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      lastSyncedLabel = parsed.toLocaleString();
+    }
+  }
+
+  const shareMessage = `${monthlyRoundup.month_name} roundup: ${formatDistance(
+    monthlyRoundup.total_distance_km,
+  )} across ${monthlyRoundup.total_activities} activities.`;
 
   const handleShare = async () => {
     if (!posterRef.current) {
@@ -187,6 +304,7 @@ export default function Dashboard() {
       svgNode.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       svgNode.setAttribute("width", `${sharePosterSize.width}`);
       svgNode.setAttribute("height", `${sharePosterSize.height}`);
+
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svgNode);
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
@@ -232,7 +350,7 @@ export default function Dashboard() {
         await navigator.share({
           files: [file],
           title: "My Strava Roundup",
-          text: `My latest ${shareMetricDescriptor.label.toLowerCase()} highlight: ${selectedMetricSummary.last.toFixed(1)} ${shareMetricDescriptor.unit}`,
+          text: shareMessage,
         });
       } else {
         const downloadUrl = URL.createObjectURL(blob);
@@ -258,8 +376,8 @@ export default function Dashboard() {
     }
     try {
       await triggerDashboardSync();
-    } catch (err) {
-      // errors surface via dashboardSyncState
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -313,10 +431,29 @@ export default function Dashboard() {
     );
   }
 
+  const mostActiveDayText = isLoadingRoundup
+    ? "Loading…"
+    : monthlyRoundup.insights.most_active_day
+      ? formatDateLabel(monthlyRoundup.insights.most_active_day.date)
+      : "Not enough data yet";
+  const mostActiveTimeText = isLoadingRoundup
+    ? "Loading…"
+    : monthlyRoundup.insights.most_active_time_of_day
+      ? formatHourLabel(monthlyRoundup.insights.most_active_time_of_day.hour)
+      : "Not enough data yet";
+  const averageActivityTimeText = isLoadingRoundup
+    ? "Loading…"
+    : monthlyRoundup.insights.average_activity_time_seconds
+      ? formatDuration(monthlyRoundup.insights.average_activity_time_seconds)
+      : "Not enough data yet";
+  const weeklyStreakText = isLoadingRoundup
+    ? "Loading…"
+    : formatWeeklyStreak(monthlyRoundup.insights.weekly_streak_weeks);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-slate-100 text-slate-900">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-12">
-        <div className="mb-10 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <section className="rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-sm backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               {athleteImage ? (
@@ -331,390 +468,146 @@ export default function Dashboard() {
                 </div>
               )}
               <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Roundup Dashboard</p>
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Hero section</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-900 sm:text-4xl">
-                  Welcome back, {athleteName.split(" ")[0]}!
+                  {monthlyRoundup.month_name} roundup
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  Monthly highlights, ready to share with your crew.
+                <p className="mt-2 text-sm text-slate-500">
+                  {athleteName} · Your {monthlyRoundup.month_name} in sports.
+                </p>
+                <p className="mt-3 text-xs text-slate-400">
+                  {lastSyncedLabel ? `Last synced ${lastSyncedLabel}` : isLoadingRoundup ? "Loading monthly data…" : "Monthly data ready"}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={handleShare}
-                disabled={isSharing}
+                disabled={isSharing || isLoadingRoundup}
                 className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <Share2 className="h-4 w-4" />
-                {isSharing ? "Creating image…" : "Share snapshot"}
+                {isSharing ? "Creating image…" : "Share roundup"}
               </Button>
-              <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-emerald-700">
-                Connected
-              </Badge>
+              <Button
+                onClick={handleSyncActivities}
+                disabled={!athleteId || isDashboardSyncing}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDashboardSyncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-4 w-4" />
+                )}
+                Sync activities
+              </Button>
             </div>
           </div>
-          <Separator className="border-slate-200" />
-        </div>
+        </section>
 
-        <div className="grid gap-6 xl:grid-cols-[2.2fr_1fr]">
-          <div className="space-y-6">
-            <Card className="border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
-              <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <CardTitle className="text-2xl font-semibold text-slate-900">
-                    {selectedMonth.monthName} roundup
-                  </CardTitle>
-                  <CardDescription className="text-slate-500">
-                    {selectedMonth.daysActive} active days powering a {selectedMonth.streakWeeks}-week streak.
-                  </CardDescription>
-                </div>
-                <label className="flex items-center gap-3 text-sm text-slate-600">
-                  <span className="font-medium uppercase tracking-[0.25em] text-slate-400">Month</span>
-                  <select
-                    value={selectedMonthId}
-                    onChange={(event) => setSelectedMonthId(event.target.value)}
-                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+        <Separator className="my-10 border-slate-200" />
+
+        <section className="space-y-6">
+          <Card className="rounded-3xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur">
+            <CardHeader>
+              <CardTitle className="text-2xl font-semibold text-slate-900">Monthly roundup</CardTitle>
+              <CardDescription className="text-slate-500">
+                {isLoadingRoundup
+                  ? "Fetching the latest snapshot…"
+                  : `Snapshot for ${monthlyRoundup.month_label}. Data is ready to swap with live metrics.`}
+              </CardDescription>
+              {roundupError ? (
+                <p className="mt-3 text-sm text-red-500">{roundupError}</p>
+              ) : null}
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {summaryCards.map((card) => (
+                  <div
+                    key={card.id}
+                    className="flex h-full flex-col justify-between rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-inner transition"
                   >
-                    {monthSummaries.map((monthOption) => (
-                      <option key={monthOption.id} value={monthOption.id}>
-                        {monthOption.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                    <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Active days</p>
-                    <p className="mt-6 text-6xl font-semibold text-slate-900">{selectedMonth.daysActive}</p>
-                    <p className="mt-3 text-sm text-slate-500">
-                      Days you laced up and logged a workout.
-                    </p>
-                    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-inner">
-                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Highlights</p>
-                      <div className="mt-3 space-y-2 text-sm text-slate-600">
-                        <p>Longest run · {selectedMonth.longestRun.toFixed(1)} km</p>
-                        <p>Best pace · {selectedMonth.bestPace}</p>
-                        <p>Longest ride · {selectedMonth.longestRide.toFixed(1)} km</p>
-                      </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{card.label}</p>
+                      {card.type === "split" ? (
+                        <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                          {isLoadingRoundup ? (
+                            <li className="text-slate-400">Loading…</li>
+                          ) : splitWithPercentages.length > 0 ? (
+                            splitWithPercentages.map((entry) => (
+                              <li key={`${card.id}-${entry.type}`} className="flex items-center justify-between">
+                                <span>{entry.type}</span>
+                                <span className="text-slate-500">
+                                  {entry.count} · {entry.percentage.toFixed(1)}%
+                                </span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-slate-400">Not enough data yet</li>
+                          )}
+                        </ul>
+                      ) : (
+                        <p className="mt-4 text-3xl font-semibold text-slate-900">{card.primary}</p>
+                      )}
                     </div>
+                    {card.caption ? <p className="text-xs text-slate-500">{card.caption}</p> : null}
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
-                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
-                        <span>Hours</span>
-                        <Clock className="h-4 w-4 text-orange-500" />
-                      </div>
-                      <p className="mt-5 text-3xl font-semibold text-slate-900">
-                        {selectedMonth.totalTime.toFixed(1)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">Moving time</p>
-                    </div>
-                    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
-                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
-                        <span>Distance</span>
-                        <TrendingUp className="h-4 w-4 text-orange-500" />
-                      </div>
-                      <p className="mt-5 text-3xl font-semibold text-slate-900">
-                        {selectedMonth.totalDistance.toFixed(1)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">Kilometers covered</p>
-                    </div>
-                    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
-                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
-                        <span>Elevation</span>
-                        <Mountain className="h-4 w-4 text-orange-500" />
-                      </div>
-                      <p className="mt-5 text-3xl font-semibold text-slate-900">
-                        {Math.round(selectedMonth.totalElevation)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">Meters climbed</p>
-                    </div>
-                    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-6 shadow-sm">
-                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-slate-400">
-                        <span>Activities</span>
-                        <CalendarDays className="h-4 w-4 text-orange-500" />
-                      </div>
-                      <p className="mt-5 text-3xl font-semibold text-slate-900">{totalActivities}</p>
-                      <p className="mt-1 text-xs text-slate-500">Logged this month</p>
-                      <div className="mt-4 space-y-1 text-xs text-slate-500">
-                        {activityEntries.length > 0 ? (
-                          activityEntries.map(([type, count]) => (
-                            <div key={type} className="flex justify-between capitalize text-slate-600">
-                              <span>{type}</span>
-                              <span>{count}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-slate-400">Breakdown coming soon</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                ))}
+              </div>
 
-            <Card className="border border-slate-200 bg-white shadow-lg shadow-slate-200/30">
-              <CardHeader className="gap-6 lg:flex lg:items-center lg:justify-between">
-                <div>
-                  <CardTitle className="text-2xl text-slate-900">Progress trend</CardTitle>
-                  <CardDescription className="text-slate-500">
-                    Switch metrics and timeframe to watch the story your training tells.
-                  </CardDescription>
+              <div className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-inner">
+                <div className="flex flex-wrap items-baseline justify-between gap-4">
+                  <p className="text-sm font-semibold text-slate-700">Calendar view</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{monthlyRoundup.month_label}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(metricOptions).map(([key, option]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setMetric(key)}
-                      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                        metric === key
-                          ? "border-orange-400 bg-orange-500 text-white shadow-md shadow-orange-500/30"
-                          : "border-slate-200 bg-white text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
+                <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-medium text-slate-400">
+                  {calendarHeaders.map((header) => (
+                    <span key={`calendar-header-${header}`} className="tracking-[0.2em]">
+                      {header}
+                    </span>
                   ))}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.35em] text-slate-400">
-                      {timeframeOptions[timeframe].label}
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold text-slate-900">
-                      {selectedMetricSummary.last.toFixed(1)} {shareMetricDescriptor.unit}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {changePercentage >= 0 ? "+" : ""}
-                      {changePercentage.toFixed(1)}% vs previous data point
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-                    {Object.entries(timeframeOptions).map(([key, option]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setTimeframe(key)}
-                        className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                          timeframe === key
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-500 hover:text-slate-900"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-6">
-                  <svg
-                    viewBox={`0 0 ${chartConfig.width} ${chartConfig.height}`}
-                    className="h-60 w-full"
-                    role="presentation"
-                  >
-                    <defs>
-                      <linearGradient id="trendGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(249,115,22,0.45)" />
-                        <stop offset="100%" stopColor="rgba(249,115,22,0.05)" />
-                      </linearGradient>
-                    </defs>
-                    {Array.from({ length: 5 }).map((_, index) => {
-                      const y =
-                        chartConfig.padding +
-                        (index / 4) * (chartConfig.height - chartConfig.padding * 2);
-                      return (
-                        <line
-                          key={index}
-                          x1={chartConfig.padding}
-                          x2={chartConfig.width - chartConfig.padding}
-                          y1={y}
-                          y2={y}
-                          stroke="rgba(148,163,184,0.2)"
-                          strokeWidth="1"
-                        />
-                      );
-                    })}
-                    <line
-                      x1={chartConfig.padding}
-                      y1={chartConfig.padding}
-                      x2={chartConfig.padding}
-                      y2={chartConfig.height - chartConfig.padding}
-                      stroke="rgba(148,163,184,0.35)"
-                    />
-                    <line
-                      x1={chartConfig.width - chartConfig.padding}
-                      y1={chartConfig.padding}
-                      x2={chartConfig.width - chartConfig.padding}
-                      y2={chartConfig.height - chartConfig.padding}
-                      stroke="rgba(148,163,184,0.15)"
-                    />
-                    {chartGeometry.areaPath ? (
-                      <path d={chartGeometry.areaPath} fill="url(#trendGradient)" stroke="none" />
-                    ) : null}
-                    {chartGeometry.linePath ? (
-                      <path
-                        d={chartGeometry.linePath}
-                        fill="none"
-                        stroke="#f97316"
-                        strokeWidth="4"
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                      />
-                    ) : null}
-                    {chartGeometry.coordinates.map((point, index) => (
-                      <g key={`${point.x}-${index}`}>
-                        <circle cx={point.x} cy={point.y} r="7" fill="#f97316" />
-                        <circle cx={point.x} cy={point.y} r="12" fill="#f97316" opacity="0.16" />
-                      </g>
-                    ))}
-                  </svg>
-                  <div className="mt-6 flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-[0.35em] text-slate-400">
-                    {labels.map((label) => (
-                      <span key={label} className="flex-1 min-w-0 text-center text-slate-500">
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-slate-200 bg-white shadow-lg shadow-slate-200/30">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between text-slate-900">
-                  Training log
-                  <span className="text-xs font-normal uppercase tracking-[0.35em] text-slate-400">
-                    Oct 13 – Oct 19
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end justify-between gap-2">
-                  {weeklyLog.map((day) => {
-                    const size = day.distance || day.time ? Math.max(34, day.distance * 6 + day.time * 12) : 20;
-                    return (
-                      <div key={day.label} className="flex w-full flex-col items-center gap-2">
-                        <div
-                          className={`flex items-center justify-center rounded-full border bg-white transition ${
-                            day.type ? typeStyles[day.type] : "border-slate-200 bg-slate-50 text-slate-400"
-                          }`}
-                          style={{ width: size, height: size }}
-                        >
-                          <span className="text-xs font-semibold">
-                            {day.distance > 0 ? day.distance.toFixed(1) : ""}
-                          </span>
-                        </div>
-                        <span className="text-xs uppercase tracking-[0.35em] text-slate-400">
-                          {day.day}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-6 text-sm text-slate-500">
-                  Mix runs, rides, and strength to stay balanced and keep the streak rolling.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="border border-slate-200 bg-white shadow-md shadow-slate-200/40">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-900">
-                  <CalendarDays className="h-4 w-4 text-orange-500" />
-                  Quick actions
-                </CardTitle>
-                <CardDescription className="text-slate-500">
-                  Jump straight into your favorite follow-up actions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  onClick={handleShare}
-                  disabled={isSharing}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-orange-500 text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <Share2 className="h-4 w-4" />
-                  {isSharing ? "Creating image…" : "Share snapshot"}
-                </Button>
-                <Button
-                  onClick={handleSyncActivities}
-                  disabled={!athleteId || isDashboardSyncing}
-                  className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-80"
-                >
-                  {isDashboardSyncing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Syncing…
-                    </span>
+                <div className="mt-2 grid grid-cols-7 gap-2">
+                  {isLoadingRoundup && calendarCells.length === 0 ? (
+                    <div className="col-span-7 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                      Loading calendar…
+                    </div>
                   ) : (
-                    "Sync Activities"
+                    calendarCells.map((cell) => (
+                      <div
+                        key={cell.key}
+                        className={`aspect-square w-full rounded-2xl border text-sm font-medium transition ${
+                          cell.day
+                            ? cell.active
+                              ? "border-orange-200 bg-orange-50 text-orange-600 shadow-sm"
+                              : "border-slate-200 bg-white text-slate-600"
+                            : "border-transparent bg-transparent text-slate-300"
+                        } flex items-center justify-center`}
+                        title={
+                          cell.day && cell.stats
+                            ? `${cell.stats.total_activities} activities · ${formatDistance(cell.stats.total_distance_km)}`
+                            : undefined
+                        }
+                      >
+                        {cell.day || ""}
+                      </div>
+                    ))
                   )}
-                </Button>
-                {dashboardSyncState.status === "success" && dashboardSyncSummary ? (
-                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-600">
-                    Last synced {new Date(dashboardSyncSummary.synced_at).toLocaleString()} ·{" "}
-                    {dashboardSyncSummary.fetched} fetched
-                  </p>
-                ) : null}
-                {dashboardSyncState.status === "error" ? (
-                  <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-center text-xs text-red-600">
-                    {dashboardSyncState.error}
-                  </p>
-                ) : null}
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
-                  Export Data
-                </Button>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
 
-            <Card className="border border-slate-200 bg-white shadow-md shadow-slate-200/40">
-              <CardHeader>
-                <CardTitle className="text-slate-900">Navigation</CardTitle>
-                <CardDescription className="text-slate-500">
-                  Quick links to manage your account.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100">
-                  Log out
-                </Button>
-                <Button className="w-full rounded-full border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100">
-                  Delete Account
-                </Button>
-                <Button className="w-full rounded-full border border-slate-200 bg-orange-50 text-orange-600 transition hover:bg-orange-100">
-                  Invite a friend
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-slate-200 bg-white shadow-md shadow-slate-200/40">
-              <CardHeader>
-                <CardTitle className="text-slate-900">Give a compliment</CardTitle>
-                <CardDescription className="text-slate-500">
-                  Give the builders a shout or share feedback for what comes next.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100">
-                  Give a compliment
-                </Button>
-                <Button className="w-full rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
-                  Give feedback
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              <div className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-inner">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Monthly insights</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <InsightItem label="Most active day" value={mostActiveDayText} />
+                  <InsightItem label="Most active time of day" value={mostActiveTimeText} />
+                  <InsightItem label="Average activity time per day" value={averageActivityTimeText} />
+                  <InsightItem label="Weekly streak" value={weeklyStreakText} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
 
       <svg
@@ -725,20 +618,7 @@ export default function Dashboard() {
         viewBox={`0 0 ${sharePosterSize.width} ${sharePosterSize.height}`}
         role="presentation"
       >
-        <defs>
-          <linearGradient id="shareGradient" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgba(249,115,22,0.35)" />
-            <stop offset="100%" stopColor="rgba(249,115,22,0.08)" />
-          </linearGradient>
-        </defs>
-        <rect
-          x="0"
-          y="0"
-          width={sharePosterSize.width}
-          height={sharePosterSize.height}
-          rx="36"
-          fill="#ffffff"
-        />
+        <rect x="0" y="0" width={sharePosterSize.width} height={sharePosterSize.height} fill="#ffffff" />
         <rect
           x="40"
           y="40"
@@ -756,116 +636,70 @@ export default function Dashboard() {
           fontSize="20"
           letterSpacing="10"
         >
-          {selectedMonth.monthName.toUpperCase()}
+          {monthlyRoundup.month_label.toUpperCase()}
         </text>
         <text
           x="80"
           y="180"
           fill="#0f172a"
           fontFamily="Inter, sans-serif"
-          fontSize="72"
+          fontSize="54"
           fontWeight="700"
         >
-          {selectedMonth.daysActive}
-        </text>
-        <text
-          x="200"
-          y="150"
-          fill="#475569"
-          fontFamily="Inter, sans-serif"
-          fontSize="18"
-          letterSpacing="6"
-        >
-          ACTIVE DAYS
-        </text>
-        <text
-          x="200"
-          y="190"
-          fill="#0f172a"
-          fontFamily="Inter, sans-serif"
-          fontSize="26"
-          fontWeight="600"
-        >
-          {selectedMetricSummary.last.toFixed(1)} {shareMetricDescriptor.unit}
+          {athleteName}
         </text>
         <text
           x="80"
           y="230"
+          fill="#475569"
+          fontFamily="Inter, sans-serif"
+          fontSize="24"
+        >
+          Monthly Roundup Overview
+        </text>
+        <text
+          x="80"
+          y="290"
+          fill="#0f172a"
+          fontFamily="Inter, sans-serif"
+          fontSize="36"
+          fontWeight="600"
+        >
+          {formatDistance(monthlyRoundup.total_distance_km)} · {monthlyRoundup.total_activities} activities
+        </text>
+        <text
+          x="80"
+          y="340"
+          fill="#475569"
+          fontFamily="Inter, sans-serif"
+          fontSize="22"
+        >
+          {monthlyRoundup.total_active_days} active days · {formatElevation(monthlyRoundup.total_elevation_gain_m)} climbed ·{" "}
+          {totalMovingTimeDisplay} moving
+        </text>
+        <text
+          x="80"
+          y="400"
           fill="#64748b"
           fontFamily="Inter, sans-serif"
           fontSize="18"
         >
-          Distance {selectedMonth.totalDistance.toFixed(1)} km • Time {selectedMonth.totalTime.toFixed(1)} hrs • Elevation{" "}
-          {Math.round(selectedMonth.totalElevation)} m
+          Activity split:
         </text>
-        <svg
-          x="80"
-          y="260"
-          width={shareChartConfig.width}
-          height={shareChartConfig.height}
-          viewBox={`0 0 ${shareChartConfig.width} ${shareChartConfig.height}`}
-        >
-          <rect
-            x="0"
-            y="0"
-            width={shareChartConfig.width}
-            height={shareChartConfig.height}
-            fill="#fff"
-            rx="28"
-          />
-          {Array.from({ length: 5 }).map((_, index) => {
-            const y =
-              shareChartConfig.padding +
-              (index / 4) * (shareChartConfig.height - shareChartConfig.padding * 2);
-            return (
-              <line
-                key={`share-grid-${index}`}
-                x1={shareChartConfig.padding}
-                x2={shareChartConfig.width - shareChartConfig.padding}
-                y1={y}
-                y2={y}
-                stroke="rgba(203,213,225,0.5)"
-                strokeWidth="1"
-              />
-            );
-          })}
-          {shareGeometry.areaPath ? (
-            <path d={shareGeometry.areaPath} fill="url(#shareGradient)" stroke="none" />
-          ) : null}
-          {shareGeometry.linePath ? (
-            <path
-              d={shareGeometry.linePath}
-              fill="none"
-              stroke="#f97316"
-              strokeWidth="5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ) : null}
-          {shareGeometry.coordinates.map((point, index) => (
-            <g key={`share-point-${index}`}>
-              <circle cx={point.x} cy={point.y} r="9" fill="#f97316" />
-              <circle cx={point.x} cy={point.y} r="15" fill="#f97316" opacity="0.18" />
-            </g>
-          ))}
-        </svg>
-        {labels.map((label, index) => (
-          <text
-            key={`label-${label}`}
-            x={
-              80 +
-              index *
-                ((shareChartConfig.width - shareChartConfig.padding * 2) / (labels.length - 1 || 1))
-            }
-            y={520}
-            fill="#64748b"
-            fontFamily="Inter, sans-serif"
-            fontSize="16"
-            textAnchor="middle"
-          >
-            {label}
-          </text>
-        ))}
+        {(splitWithPercentages.length ? splitWithPercentages : [{ type: "No data yet", count: 0, percentage: 0 }]).map(
+          (entry, index) => (
+            <text
+              key={`split-${entry.type}-${index}`}
+              x="80"
+              y={430 + index * 28}
+              fill="#334155"
+              fontFamily="Inter, sans-serif"
+              fontSize="18"
+            >
+              {entry.type} · {entry.count}{entry.count ? ` (${entry.percentage.toFixed(1)}%)` : ""}
+            </text>
+          ),
+        )}
         <text
           x={sharePosterSize.width - 80}
           y={sharePosterSize.height - 60}
@@ -881,62 +715,11 @@ export default function Dashboard() {
   );
 }
 
-function buildChartGeometry(values, width, height, padding) {
-  if (!values || values.length === 0) {
-    return { areaPath: "", linePath: "", coordinates: [] };
-  }
-
-  const safePadding = typeof padding === "number" ? padding : 24;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const innerWidth = width - safePadding * 2;
-  const innerHeight = height - safePadding * 2;
-  const step = values.length > 1 ? innerWidth / (values.length - 1) : 0;
-
-  const coordinates = values.map((value, index) => {
-    const x = safePadding + index * step;
-    const normalized = (value - min) / range;
-    const y = safePadding + (1 - normalized) * innerHeight;
-    return { x, y, value };
-  });
-
-  if (coordinates.length === 1) {
-    const point = coordinates[0];
-    const baseY = height - safePadding;
-    const areaPath = `M ${point.x} ${baseY} L ${point.x} ${point.y} L ${point.x + 1} ${baseY} Z`;
-    const linePath = `M ${point.x} ${point.y}`;
-    return { areaPath, linePath, coordinates };
-  }
-
-  const linePath = buildSmoothPath(coordinates);
-  const areaPath = `${linePath} L ${coordinates.at(-1).x} ${height - safePadding} L ${coordinates[0].x} ${height - safePadding} Z`;
-
-  return { areaPath, linePath, coordinates };
-}
-
-function buildSmoothPath(points) {
-  if (!points || points.length === 0) {
-    return "";
-  }
-  if (points.length === 1) {
-    const point = points[0];
-    return `M ${point.x} ${point.y}`;
-  }
-
-  const path = [`M ${points[0].x} ${points[0].y}`];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const current = points[index];
-    const next = points[index + 1];
-    const previous = points[index - 1] ?? current;
-    const afterNext = points[index + 2] ?? next;
-
-    const control1x = current.x + (next.x - previous.x) / 6;
-    const control1y = current.y + (next.y - previous.y) / 6;
-    const control2x = next.x - (afterNext.x - current.x) / 6;
-    const control2y = next.y - (afterNext.y - current.y) / 6;
-
-    path.push(`C ${control1x} ${control1y}, ${control2x} ${control2y}, ${next.x} ${next.y}`);
-  }
-  return path.join(" ");
+function InsightItem({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{label}</p>
+      <p className="mt-2 text-sm font-medium text-slate-700">{value}</p>
+    </div>
+  );
 }

@@ -36,6 +36,8 @@ def sync_athlete_activities(
             since_cutoff = latest_existing.start_date - timedelta(minutes=1)
 
     # Ensure we never pull data before the start of 2025.
+    if since_cutoff is not None and since_cutoff.tzinfo is None:
+        since_cutoff = since_cutoff.replace(tzinfo=timezone.utc)
     if since_cutoff is None or since_cutoff < baseline:
         since_cutoff = baseline
 
