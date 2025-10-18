@@ -3,10 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Loader2, RefreshCcw, Share2 } from "lucide-react";
+import SharePoster, { sharePosterTokens } from "@/components/share/SharePoster";
 import { useActivitySync } from "@/hooks/useActivitySync";
 import { fetchMonthlyRoundup } from "@/lib/api";
 
-const sharePosterSize = { width: 960, height: 540 };
+const sharePosterSize = { width: 1080, height: 1920 };
 const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function getMonthParam(date = new Date()) {
@@ -160,10 +161,16 @@ export default function Dashboard() {
   const [roundupData, setRoundupData] = useState(null);
   const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
   const [roundupError, setRoundupError] = useState(null);
+  const [shareAthleteImage, setShareAthleteImage] = useState("");
 
   const monthParam = useMemo(() => getMonthParam(new Date()), []);
   const fallbackRoundup = useMemo(() => buildEmptyRoundup(monthParam), [monthParam]);
   const monthlyRoundup = roundupData ?? fallbackRoundup;
+  const athleteInitial = athleteName.trim().charAt(0).toUpperCase();
+  const currentYear = new Date().getFullYear();
+  const safeActiveDaysCount = Number(monthlyRoundup.total_active_days) || 0;
+  const safeActivitiesCount = Number(monthlyRoundup.total_activities) || 0;
+  const safeDistanceKm = Number(monthlyRoundup.total_distance_km) || 0;
 
   const totalMovingTimeHours = monthlyRoundup.total_moving_time_seconds / 3600;
   const totalMovingTimeDisplay = formatDuration(monthlyRoundup.total_moving_time_seconds);
@@ -247,6 +254,45 @@ export default function Dashboard() {
     ],
   );
 
+  const shareMetrics = useMemo(() => {
+    const formattedDistance = `${(Math.round(safeDistanceKm * 10) / 10).toLocaleString(undefined, {
+      minimumFractionDigits: safeDistanceKm >= 100 ? 0 : 1,
+      maximumFractionDigits: safeDistanceKm >= 100 ? 0 : 1,
+    })} km`;
+
+    return [
+      {
+        id: "active-days",
+        label: "Total Active Days",
+        value: safeActiveDaysCount.toLocaleString(),
+        caption: "Days you showed up",
+      },
+      {
+        id: "total-activities",
+        label: "Total Activities",
+        value: safeActivitiesCount.toLocaleString(),
+        caption: "Sessions logged",
+      },
+      {
+        id: "moving-time",
+        label: "Total Moving Time",
+        value: totalMovingTimeDisplay,
+        caption: "Time on the move",
+      },
+      {
+        id: "distance",
+        label: "Total Distance",
+        value: formattedDistance,
+        caption: "Kilometres covered",
+      },
+    ];
+  }, [
+    safeActiveDaysCount,
+    safeActivitiesCount,
+    safeDistanceKm,
+    totalMovingTimeDisplay,
+  ]);
+
   const loadMonthlyRoundup = useCallback(async () => {
     if (!athleteId) {
       return;
@@ -281,6 +327,60 @@ export default function Dashboard() {
     }
   }, [athleteId, dashboardSyncState.summary?.synced_at, loadMonthlyRoundup]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function prepareShareImage() {
+      if (!athleteImage) {
+        if (isActive) {
+          setShareAthleteImage("");
+        }
+        return;
+      }
+
+      if (athleteImage.startsWith("data:")) {
+        if (isActive) {
+          setShareAthleteImage(athleteImage);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(athleteImage, { mode: "cors" });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch athlete image: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (!isActive) {
+            return;
+          }
+          const result = typeof reader.result === "string" ? reader.result : "";
+          setShareAthleteImage(result);
+        };
+        reader.onerror = () => {
+          if (isActive) {
+            setShareAthleteImage("");
+          }
+        };
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.error("Failed to prepare athlete image for share poster", error);
+        if (isActive) {
+          setShareAthleteImage("");
+        }
+      }
+    }
+
+    prepareShareImage();
+
+    return () => {
+      isActive = false;
+    };
+  }, [athleteImage]);
+
   const syncedAt = dashboardSyncState?.summary?.synced_at;
   let lastSyncedLabel = null;
   if (syncedAt) {
@@ -290,9 +390,9 @@ export default function Dashboard() {
     }
   }
 
-  const shareMessage = `${monthlyRoundup.month_name} roundup: ${formatDistance(
-    monthlyRoundup.total_distance_km,
-  )} across ${monthlyRoundup.total_activities} activities.`;
+  const shareMessage = `${monthlyRoundup.month_name} roundup: ${safeActiveDaysCount.toLocaleString()} active days, ${safeActivitiesCount.toLocaleString()} activities, ${formatDistance(
+    safeDistanceKm,
+  )} in ${totalMovingTimeDisplay}.`;
 
   const handleShare = async () => {
     if (!posterRef.current) {
@@ -321,7 +421,7 @@ export default function Dashboard() {
       URL.revokeObjectURL(svgUrl);
 
       const canvas = document.createElement("canvas");
-      const scale = Math.max(window.devicePixelRatio || 1, 2);
+      const scale = Math.max(window.devicePixelRatio || 1, 3);
       canvas.width = sharePosterSize.width * scale;
       canvas.height = sharePosterSize.height * scale;
       const ctx = canvas.getContext("2d");
@@ -610,107 +710,20 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <svg
+      <SharePoster
         ref={posterRef}
-        className="hidden"
-        width={sharePosterSize.width}
-        height={sharePosterSize.height}
-        viewBox={`0 0 ${sharePosterSize.width} ${sharePosterSize.height}`}
-        role="presentation"
-      >
-        <rect x="0" y="0" width={sharePosterSize.width} height={sharePosterSize.height} fill="#ffffff" />
-        <rect
-          x="40"
-          y="40"
-          width={sharePosterSize.width - 80}
-          height={sharePosterSize.height - 80}
-          rx="32"
-          fill="#f8fafc"
-          stroke="rgba(148,163,184,0.25)"
-        />
-        <text
-          x="80"
-          y="120"
-          fill="#f97316"
-          fontFamily="Inter, sans-serif"
-          fontSize="20"
-          letterSpacing="10"
-        >
-          {monthlyRoundup.month_label.toUpperCase()}
-        </text>
-        <text
-          x="80"
-          y="180"
-          fill="#0f172a"
-          fontFamily="Inter, sans-serif"
-          fontSize="54"
-          fontWeight="700"
-        >
-          {athleteName}
-        </text>
-        <text
-          x="80"
-          y="230"
-          fill="#475569"
-          fontFamily="Inter, sans-serif"
-          fontSize="24"
-        >
-          Monthly Roundup Overview
-        </text>
-        <text
-          x="80"
-          y="290"
-          fill="#0f172a"
-          fontFamily="Inter, sans-serif"
-          fontSize="36"
-          fontWeight="600"
-        >
-          {formatDistance(monthlyRoundup.total_distance_km)} · {monthlyRoundup.total_activities} activities
-        </text>
-        <text
-          x="80"
-          y="340"
-          fill="#475569"
-          fontFamily="Inter, sans-serif"
-          fontSize="22"
-        >
-          {monthlyRoundup.total_active_days} active days · {formatElevation(monthlyRoundup.total_elevation_gain_m)} climbed ·{" "}
-          {totalMovingTimeDisplay} moving
-        </text>
-        <text
-          x="80"
-          y="400"
-          fill="#64748b"
-          fontFamily="Inter, sans-serif"
-          fontSize="18"
-        >
-          Activity split:
-        </text>
-        {(splitWithPercentages.length ? splitWithPercentages : [{ type: "No data yet", count: 0, percentage: 0 }]).map(
-          (entry, index) => (
-            <text
-              key={`split-${entry.type}-${index}`}
-              x="80"
-              y={430 + index * 28}
-              fill="#334155"
-              fontFamily="Inter, sans-serif"
-              fontSize="18"
-            >
-              {entry.type} · {entry.count}{entry.count ? ` (${entry.percentage.toFixed(1)}%)` : ""}
-            </text>
-          ),
-        )}
-        <text
-          x={sharePosterSize.width - 80}
-          y={sharePosterSize.height - 60}
-          fill="#94a3b8"
-          fontFamily="Inter, sans-serif"
-          fontSize="16"
-          textAnchor="end"
-        >
-          Strava Roundup • {new Date().getFullYear()}
-        </text>
-      </svg>
+        className="hidden pointer-events-none"
+        size={sharePosterSize}
+        tokens={sharePosterTokens}
+        monthLabel={monthlyRoundup.month_label}
+        athleteName={athleteName}
+        athleteInitial={athleteInitial}
+        metrics={shareMetrics}
+        distanceHeadline={`${formatDistance(safeDistanceKm)} across ${safeActivitiesCount.toLocaleString()} activities`}
+        summaryLine={`${safeActiveDaysCount.toLocaleString()} active days • ${totalMovingTimeDisplay} in motion`}
+        posterYear={currentYear}
+        posterImage={shareAthleteImage}
+      />
     </div>
   );
 }
