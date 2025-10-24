@@ -56,6 +56,7 @@ const SharePoster = forwardRef(
       summaryLine,
       posterYear,
       posterImage,
+      templateSvg,
     },
     ref,
   ) => {
@@ -63,6 +64,88 @@ const SharePoster = forwardRef(
     const { palette, typography, layout } = tokens;
     const { photo, metrics: metricLayout } = layout;
     const metricCards = Array.isArray(metrics) ? metrics.slice(0, 4) : [];
+    const metricValues = {
+      activeDays: String(metricCards[0]?.value ?? ""),
+      totalActivities: String(metricCards[1]?.value ?? ""),
+      movingTime: String(metricCards[2]?.value ?? ""),
+      distance: String(metricCards[3]?.value ?? ""),
+    };
+    const monthLabelString = monthLabel ?? "";
+    const monthLabelHasYear = /\b\d{4}\b/.test(monthLabelString);
+    const monthYearLabel = monthLabelHasYear
+      ? monthLabelString || posterYear || ""
+      : [monthLabelString, posterYear].filter(Boolean).join(" ").trim();
+
+    // Helper: escape text for safe insertion into SVG/XML
+    const escapeXml = (str = "") =>
+      String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+
+    // If a template SVG string was provided, perform token replacements
+    if (typeof templateSvg === "string" && templateSvg.trim().length > 0) {
+      let svg = templateSvg;
+
+      const replacements = {
+        ATHLETE_NAME: athleteName ?? "",
+        ATHLETE_INITIAL: (athleteInitial ?? (athleteName ? athleteName[0] : "A")).toString().toUpperCase(),
+        MONTH: monthLabel ?? "",
+        MONTH_UPPER: (monthLabel ?? "").toString().toUpperCase(),
+        MONTH_YEAR: monthYearLabel,
+        DISTANCE_HEADLINE: distanceHeadline ?? "",
+        SUMMARY_LINE: summaryLine ?? "",
+        POSTER_YEAR: posterYear ?? "",
+        ACTIVE_DAYS: metricValues.activeDays,
+        TOTAL_ACTIVITIES: metricValues.totalActivities,
+        TOTAL_MOVING_TIME: metricValues.movingTime,
+        TOTAL_DISTANCE: metricValues.distance,
+        activities: metricValues.totalActivities,
+        days: metricValues.activeDays,
+        hours: metricValues.movingTime,
+        km: metricValues.distance,
+      };
+
+      // metrics up to 4
+      (metricCards || []).forEach((m, i) => {
+        replacements[`METRIC_${i}_LABEL`] = typeof m.label === "string" ? m.label : "";
+        replacements[`METRIC_${i}_VALUE`] = m.value ?? "";
+        replacements[`METRIC_${i}_CAPTION`] = m.caption ?? "";
+      });
+
+      // Perform safe replacements for each token.
+      // Supports both {TOKEN} and {{TOKEN}} syntaxes for flexibility with design tools.
+      Object.keys(replacements).forEach((key) => {
+        const variants = [new RegExp(`\\{${key}\\}`, "g"), new RegExp(`\\{\\{${key}\\}\\}`, "g")];
+        variants.forEach((re) => {
+          svg = svg.replace(re, escapeXml(replacements[key]));
+        });
+      });
+
+      // If posterImage is provided, replace a placeholder token or an <image href="{{POSTER_IMAGE}}" /> pattern
+      if (posterImage) {
+        // Replace explicit tokens first
+        svg = svg.replace(/\{POSTER_IMAGE\}/g, escapeXml(posterImage));
+        svg = svg.replace(/\{\{POSTER_IMAGE\}\}/g, escapeXml(posterImage));
+        // then replace common placeholder attribute patterns like href="POSTER_IMAGE" or empty hrefs
+        svg = svg.replace(/(href=\")(?:\s*\{|\s*\{\{)?POSTER_IMAGE(?:\}\}|\})?(\")/g, (_m, p1, p2) => {
+          return `${p1}${escapeXml(posterImage)}${p2}`;
+        });
+      }
+
+      // Render the processed SVG string. Use a container div and set innerHTML.
+      return (
+        <div
+          ref={ref}
+          className={className}
+          style={{ width, height }}
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      );
+    }
 
     return (
       <svg
@@ -271,4 +354,3 @@ const SharePoster = forwardRef(
 SharePoster.displayName = "SharePoster";
 
 export default SharePoster;
-

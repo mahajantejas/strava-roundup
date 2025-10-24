@@ -1,6 +1,9 @@
+import base64
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -97,3 +100,25 @@ def get_monthly_roundup(
         raise HTTPException(status_code=404, detail="Athlete not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/proxy/image")
+def proxy_image(url: str):
+    """
+    Fetch an external image and return it as a data URL so the frontend can embed it
+    without tripping the browser's canvas security restrictions.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    try:
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Could not download image") from exc
+
+    content_type = response.headers.get("Content-Type", "image/jpeg")
+    encoded = base64.b64encode(response.content).decode("ascii")
+    data_url = f"data:{content_type};base64,{encoded}"
+    return {"dataUrl": data_url}
