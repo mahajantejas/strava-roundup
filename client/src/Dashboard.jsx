@@ -200,6 +200,29 @@ export default function Dashboard() {
   } = useActivitySync(athleteId, { auto: true });
 
   const posterRef = useRef(null);
+  const [shareTemplateSvg, setShareTemplateSvg] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadTemplate() {
+      try {
+        const res = await fetch("/ShareTemplateV23Oct.svg");
+        if (!res.ok) {
+          return;
+        }
+        const text = await res.text();
+        // Only accept responses that look like SVG content. Some dev servers return HTML with 200s.
+        if (!text || !text.toLowerCase().includes("<svg")) {
+          return;
+        }
+        if (active) setShareTemplateSvg(text);
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadTemplate();
+    return () => { active = false; };
+  }, []);
 
   const summaryCards = useMemo(
     () => [
@@ -345,6 +368,16 @@ export default function Dashboard() {
         return;
       }
 
+      const readBlobAsDataUrl = (blob) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
+          reader.onerror = () => reject(new Error("FileReader failed"));
+          reader.readAsDataURL(blob);
+        });
+
+      let dataUrl = "";
+
       try {
         const response = await fetch(athleteImage, { mode: "cors" });
         if (!response.ok) {
@@ -352,25 +385,28 @@ export default function Dashboard() {
         }
 
         const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (!isActive) {
-            return;
-          }
-          const result = typeof reader.result === "string" ? reader.result : "";
-          setShareAthleteImage(result);
-        };
-        reader.onerror = () => {
-          if (isActive) {
-            setShareAthleteImage("");
-          }
-        };
-        reader.readAsDataURL(blob);
+        dataUrl = await readBlobAsDataUrl(blob);
       } catch (error) {
         console.error("Failed to prepare athlete image for share poster", error);
-        if (isActive) {
-          setShareAthleteImage("");
+      }
+
+      if (!dataUrl) {
+        try {
+          const proxyResponse = await fetch(`/proxy/image?url=${encodeURIComponent(athleteImage)}`);
+          if (!proxyResponse.ok) {
+            throw new Error(`Proxy fetch failed: ${proxyResponse.status}`);
+          }
+          const payload = await proxyResponse.json();
+          if (payload?.dataUrl && typeof payload.dataUrl === "string") {
+            dataUrl = payload.dataUrl;
+          }
+        } catch (proxyError) {
+          console.error("Proxy image fetch failed", proxyError);
         }
+      }
+
+      if (isActive) {
+        setShareAthleteImage(dataUrl);
       }
     }
 
@@ -398,15 +434,65 @@ export default function Dashboard() {
     if (!posterRef.current) {
       return;
     }
+
+    // keep svgString visible to the catch block for additional debugging
+    let svgString = null;
+
     try {
       setIsSharing(true);
-      const svgNode = posterRef.current.cloneNode(true);
-      svgNode.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      svgNode.setAttribute("width", `${sharePosterSize.width}`);
-      svgNode.setAttribute("height", `${sharePosterSize.height}`);
+      // Clone the poster and find the actual <svg> element inside it.
+      const cloned = posterRef.current.cloneNode(true);
+      let svgElement = cloned;
+      if (svgElement.nodeName && svgElement.nodeName.toLowerCase() !== "svg") {
+        svgElement = cloned.querySelector("svg");
+      }
+
+      if (!svgElement) {
+        throw new Error("No <svg> element found in poster DOM");
+      }
+
+      // Ensure SVG has proper namespace and desired width/height attributes
+      svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      svgElement.setAttribute("width", `${sharePosterSize.width}`);
+      svgElement.setAttribute("height", `${sharePosterSize.height}`);
 
       const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(svgNode);
+      svgString = serializer.serializeToString(svgElement);
+
+      // log summary information to help debug malformed SVGs or unexpected tokens
+      try {
+        console.log("[share] generated svg length:", svgString.length);
+        console.debug("[share] svg preview:", svgString.slice(0, 2000));
+      } catch (e) {
+        // ignore logging errors
+      }
+
+      // Normalize the serialized SVG so it will scale to the target poster dimensions
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgString, "image/svg+xml");
+        const root = doc.documentElement;
+
+        // If there's no viewBox, try to infer one from width/height attributes
+        const existingViewBox = root.getAttribute("viewBox");
+        const parsedWidth = parseFloat(root.getAttribute("width"));
+        const parsedHeight = parseFloat(root.getAttribute("height"));
+        if (!existingViewBox && parsedWidth && parsedHeight) {
+          root.setAttribute("viewBox", `0 0 ${parsedWidth} ${parsedHeight}`);
+        }
+
+  // Set the exported SVG's rendered pixel size to the share poster size
+  root.setAttribute("width", `${sharePosterSize.width}`);
+  root.setAttribute("height", `${sharePosterSize.height}`);
+  // Ensure SVG preserves aspect ratio and centers the artwork when scaled
+  root.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+        // Re-serialize the normalized SVG
+        svgString = new XMLSerializer().serializeToString(root);
+      } catch (err) {
+        console.warn("[share] Failed to normalize SVG (continuing with original):", err);
+      }
+
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
       const svgUrl = URL.createObjectURL(svgBlob);
 
@@ -414,32 +500,59 @@ export default function Dashboard() {
       image.crossOrigin = "anonymous";
       const imageLoad = new Promise((resolve, reject) => {
         image.onload = () => resolve(true);
-        image.onerror = () => reject(new Error("Preview failed"));
+        image.onerror = (ev) => {
+          console.error("[share] image.onerror while loading SVG", { svgUrl, ev });
+          reject(new Error("Preview failed to load image from generated SVG"));
+        };
       });
       image.src = svgUrl;
-      await imageLoad;
+      try {
+        await imageLoad;
+      } catch (err) {
+        // revoke and rethrow so outer catch can handle/log
+        URL.revokeObjectURL(svgUrl);
+        throw err;
+      }
       URL.revokeObjectURL(svgUrl);
 
       const canvas = document.createElement("canvas");
-      const scale = Math.max(window.devicePixelRatio || 1, 3);
-      canvas.width = sharePosterSize.width * scale;
-      canvas.height = sharePosterSize.height * scale;
+      // use devicePixelRatio but don't force a very large minimum - that can blow memory on some devices
+      const scale = Math.max(window.devicePixelRatio || 1, 1);
+      // ensure integer pixel dimensions
+      canvas.width = Math.ceil(sharePosterSize.width * scale);
+      canvas.height = Math.ceil(sharePosterSize.height * scale);
       const ctx = canvas.getContext("2d");
 
       if (!ctx) {
         throw new Error("Canvas not supported");
       }
 
-      ctx.scale(scale, scale);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, sharePosterSize.width, sharePosterSize.height);
-      ctx.drawImage(image, 0, 0, sharePosterSize.width, sharePosterSize.height);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, sharePosterSize.width, sharePosterSize.height);
+
+  // Draw the image centered while preserving aspect ratio (contain)
+  // use the image's intrinsic pixel dimensions to compute a containment fit
+  const imgW = image.naturalWidth || image.width || sharePosterSize.width;
+  const imgH = image.naturalHeight || image.height || sharePosterSize.height;
+  const fitScale = Math.min(sharePosterSize.width / imgW, sharePosterSize.height / imgH);
+  const destW = imgW * fitScale;
+  const destH = imgH * fitScale;
+  const destX = (sharePosterSize.width - destW) / 2;
+  const destY = (sharePosterSize.height - destH) / 2;
+
+  ctx.drawImage(image, destX, destY, destW, destH);
 
       const blob = await new Promise((resolve) => {
         canvas.toBlob((canvasBlob) => resolve(canvasBlob), "image/png");
       });
 
       if (!blob) {
+        console.error("[share] canvas.toBlob returned null", {
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          scale,
+        });
         throw new Error("We could not create the image");
       }
 
@@ -463,8 +576,16 @@ export default function Dashboard() {
         URL.revokeObjectURL(downloadUrl);
       }
     } catch (error) {
-      console.error(error);
-      window.alert("We could not generate the shareable image. Please try again.");
+      // surface more info to the console to help diagnose the root cause
+      console.error("[share] generation error:", error);
+      if (svgString) {
+        try {
+          console.debug("[share] last generated svg (truncated):", svgString.slice(0, 4000));
+        } catch (e) {
+          // ignore
+        }
+      }
+      window.alert("We could not generate the shareable image. Check the browser console for details.");
     } finally {
       setIsSharing(false);
     }
@@ -723,6 +844,7 @@ export default function Dashboard() {
         summaryLine={`${safeActiveDaysCount.toLocaleString()} active days • ${totalMovingTimeDisplay} in motion`}
         posterYear={currentYear}
         posterImage={shareAthleteImage}
+        templateSvg={shareTemplateSvg}
       />
     </div>
   );
