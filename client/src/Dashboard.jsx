@@ -528,8 +528,8 @@ export default function Dashboard() {
       }
 
   ctx.scale(scale, scale);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, sharePosterSize.width, sharePosterSize.height);
+  +ctx.clearRect(0, 0, sharePosterSize.width, sharePosterSize.height);
+
 
   // Draw the image centered while preserving aspect ratio (contain)
   // use the image's intrinsic pixel dimensions to compute a containment fit
