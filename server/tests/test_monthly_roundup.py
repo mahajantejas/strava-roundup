@@ -144,3 +144,45 @@ def test_build_monthly_roundup_validates_month_format(db_session: Session):
 
     with pytest.raises(ValueError):
         build_monthly_roundup(db_session, athlete.id, "2025/01")
+
+
+def test_build_monthly_roundup_uses_local_dates_for_insights(db_session: Session):
+    athlete = Athlete(
+        strava_id=999,
+        firstname="Casey",
+        lastname="Clock",
+        access_token="token",
+        refresh_token="refresh",
+        expires_at=999999,
+    )
+    db_session.add(athlete)
+    db_session.commit()
+    db_session.refresh(athlete)
+
+    late_evening_utc = datetime(2025, 1, 11, 5, 30, tzinfo=timezone.utc)
+    activity = make_activity(
+        athlete.id,
+        2001,
+        late_evening_utc,
+        local_offset_hours=-8,
+        distance_km=12.0,
+        moving_seconds=4200,
+    )
+    db_session.add(activity)
+    db_session.commit()
+
+    roundup = build_monthly_roundup(db_session, athlete.id, "2025-01")
+
+    day_10 = next(day for day in roundup.calendar_days if day.day == 10)
+    day_11 = next(day for day in roundup.calendar_days if day.day == 11)
+
+    assert day_10.is_active is True
+    assert day_10.total_activities == 1
+    assert day_11.is_active is False
+
+    insights = roundup.insights
+    assert insights.most_active_day is not None
+    assert insights.most_active_day.date.day == 10
+
+    assert insights.most_active_time_of_day is not None
+    assert insights.most_active_time_of_day.hour == 21

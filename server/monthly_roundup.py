@@ -90,15 +90,13 @@ def build_monthly_roundup(
         total_elevation += elevation
         activity_split_counter[activity.activity_type or "Other"] += 1
 
-        start_dt = activity.start_date or activity.start_date_local
-        if start_dt is None:
+        local_start = activity.start_date_local or activity.start_date
+        if local_start is None:
             continue
-        if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=timezone.utc)
-        else:
-            start_dt = start_dt.astimezone(timezone.utc)
 
-        day_key = start_dt.date()
+        local_dt = local_start
+
+        day_key = local_dt.date()
         if day_key.month != month_date.month or day_key.year != month_date.year:
             continue
 
@@ -107,12 +105,7 @@ def build_monthly_roundup(
         day_bucket["total_distance_km"] += distance
         day_bucket["total_moving_time_seconds"] += moving_time
 
-        hour_source = activity.start_date_local or activity.start_date
-        if hour_source is None:
-            hour_source = start_dt
-        if hour_source.tzinfo is None:
-            hour_source = hour_source.replace(tzinfo=timezone.utc)
-        hour_bucket = hour_buckets[hour_source.hour]
+        hour_bucket = hour_buckets[local_dt.hour]
         hour_bucket["total_activities"] += 1
         hour_bucket["total_moving_time_seconds"] += moving_time
 
