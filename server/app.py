@@ -4,7 +4,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from activity_sync import AthleteNotFoundError, sync_athlete_activities
@@ -54,6 +54,17 @@ def create_athlete(athlete: AthleteCreate, db: Session = Depends(get_db)):
 @app.get("/athletes")
 def get_athletes(db: Session = Depends(get_db)):
     return db.query(Athlete).all()
+
+@app.delete("/athletes/{athlete_id}", status_code=204)
+def delete_athlete(athlete_id: int, db: Session = Depends(get_db)):
+    athlete = db.query(Athlete).filter(Athlete.id == athlete_id).one_or_none()
+    if athlete is None:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    db.delete(athlete)
+    db.commit()
+
+    return Response(status_code=204)
 
 @app.post("/athletes/{athlete_id}/sync", response_model=SyncSummary)
 def sync_athlete(

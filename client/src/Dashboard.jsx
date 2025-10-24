@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Loader2, RefreshCcw, Share2 } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCcw, Share2, Trash2 } from "lucide-react";
 import SharePoster, { sharePosterTokens } from "@/components/share/SharePoster";
 import { useActivitySync } from "@/hooks/useActivitySync";
-import { fetchMonthlyRoundup } from "@/lib/api";
+import { deleteAthleteData, fetchMonthlyRoundup } from "@/lib/api";
 
 const sharePosterSize = { width: 1080, height: 1920 };
 const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -120,6 +120,14 @@ function formatDistance(km) {
   return `${rounded.toFixed(1)} km`;
 }
 
+function formatDailyDistance(distanceKm) {
+  const safeDistance = Math.max(Number(distanceKm) || 0, 0);
+  if (safeDistance >= 100) {
+    return Math.round(safeDistance).toLocaleString();
+  }
+  return (Math.round(safeDistance * 10) / 10).toFixed(1);
+}
+
 function formatElevation(meters) {
   if (!meters) {
     return "0 m";
@@ -132,7 +140,14 @@ function formatDateLabel(isoDate) {
     return "";
   }
   const formatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
-  const date = new Date(`${isoDate}T00:00:00Z`);
+  const [yearStr, monthStr, dayStr] = isoDate.split("-");
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const day = Number(dayStr);
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || !Number.isFinite(day)) {
+    return "";
+  }
+  const date = new Date(year, monthIndex, day);
   return formatter.format(date);
 }
 
@@ -141,7 +156,8 @@ function formatHourLabel(hour) {
     return "";
   }
   const formatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-  const baseDate = new Date(Date.UTC(1970, 0, 1, hour, 0));
+  const safeHour = Math.min(Math.max(Math.round(hour), 0), 23);
+  const baseDate = new Date(1970, 0, 1, safeHour, 0, 0, 0);
   return formatter.format(baseDate);
 }
 
@@ -150,6 +166,88 @@ function formatWeeklyStreak(weeks) {
     return "No active weeks yet";
   }
   return `${weeks} week${weeks === 1 ? "" : "s"}`;
+}
+
+const activitySplitColors = ["#f97316", "#6366f1", "#22c55e", "#facc15", "#0ea5e9", "#f43f5e", "#a855f7"];
+
+function ActivitySplitVisualization({ entries, isLoading }) {
+  if (isLoading) {
+    return <div className="mt-4 text-sm text-slate-400">Loading…</div>;
+  }
+  if (!entries || entries.length === 0) {
+    return <div className="mt-4 text-sm text-slate-400">Not enough data yet</div>;
+  }
+
+  const totalCount = entries.reduce((sum, entry) => sum + (Number(entry.count) || 0), 0);
+  if (totalCount === 0) {
+    return <div className="mt-4 text-sm text-slate-400">Not enough data yet</div>;
+  }
+
+  let cumulative = 0;
+  const segments = entries.map((entry, index) => {
+    const count = Number(entry.count) || 0;
+    const fraction = count / totalCount;
+    const start = cumulative;
+    cumulative += fraction;
+    const color = activitySplitColors[index % activitySplitColors.length];
+    return {
+      entry,
+      color,
+      fraction,
+      start,
+      end: cumulative,
+    };
+  });
+
+  // Ensure the gradient closes the circle even with rounding issues
+  if (segments.length > 0) {
+    segments[segments.length - 1].end = 1;
+  }
+
+  const gradientStops = segments
+    .map((segment) => {
+      const startDeg = `${segment.start * 360}deg`;
+      const endDeg = `${segment.end * 360}deg`;
+      return `${segment.color} ${startDeg} ${endDeg}`;
+    })
+    .join(", ");
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-5">
+      <div className="relative flex h-36 w-36 items-center justify-center">
+        <div
+          className="h-full w-full rounded-full border border-slate-100 shadow-inner"
+          style={{
+            backgroundImage: `conic-gradient(${gradientStops})`,
+          }}
+        />
+        <div className="absolute flex h-16 w-16 flex-col items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-600 shadow-sm">
+          <span>{totalCount.toLocaleString()}</span>
+          <span className="text-[0.6rem] uppercase tracking-wide text-slate-400">total</span>
+        </div>
+      </div>
+      <ul className="w-full space-y-2 text-sm text-slate-600">
+        {segments.map(({ entry, color, fraction }) => {
+          const percentageValue = Number(entry.percentage);
+          const safePercentage = Number.isFinite(percentageValue)
+            ? percentageValue
+            : Math.round(fraction * 1000) / 10;
+          return (
+            <li key={entry.type} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                <span className="font-medium">{entry.type}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">{entry.count.toLocaleString()}</span>
+                <span>{safePercentage.toFixed(1)}%</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -161,6 +259,8 @@ export default function Dashboard() {
   const [roundupData, setRoundupData] = useState(null);
   const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
   const [roundupError, setRoundupError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [isDeletingAthlete, setIsDeletingAthlete] = useState(false);
   const [shareAthleteImage, setShareAthleteImage] = useState("");
 
   const monthParam = useMemo(() => getMonthParam(new Date()), []);
@@ -192,6 +292,15 @@ export default function Dashboard() {
     () => buildCalendarCells(monthlyRoundup.calendar_days),
     [monthlyRoundup.calendar_days],
   );
+  const maxCalendarDistance = useMemo(() => {
+    if (!Array.isArray(monthlyRoundup.calendar_days) || monthlyRoundup.calendar_days.length === 0) {
+      return 0;
+    }
+    return monthlyRoundup.calendar_days.reduce(
+      (maxDistance, entry) => Math.max(maxDistance, Number(entry.total_distance_km) || 0),
+      0,
+    );
+  }, [monthlyRoundup.calendar_days]);
 
   const {
     syncState: dashboardSyncState,
@@ -262,7 +371,7 @@ export default function Dashboard() {
         id: "activitySplit",
         label: "Split of activities",
         type: "split",
-        caption: isLoadingRoundup ? "Loading activity split" : "Rounded share for each activity type",
+        caption: isLoadingRoundup ? "Loading activity split" : "",
       },
     ],
     [
@@ -602,6 +711,42 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteData = async () => {
+    if (!athleteId || isDeletingAthlete) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      "This will permanently delete your synced activities and log you out. Do you want to continue?",
+    );
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeleteError(null);
+    setIsDeletingAthlete(true);
+
+    try {
+      await deleteAthleteData(athleteId);
+      if (typeof window !== "undefined") {
+        const keysToClear = ["athleteId", "athleteName", "athleteImage", "athleteProfile"];
+        keysToClear.forEach((key) => {
+          try {
+            window.localStorage.removeItem(key);
+          } catch (storageError) {
+            console.warn("Failed to remove key from localStorage", key, storageError);
+          }
+        });
+      }
+      window.location.assign("/");
+    } catch (error) {
+      console.error("Failed to delete athlete data", error);
+      setDeleteError(error?.message || "We could not delete your data. Please try again.");
+    } finally {
+      setIsDeletingAthlete(false);
+    }
+  };
+
   if (!athleteId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-white via-slate-50 to-slate-100 px-6 text-center text-slate-700">
@@ -689,12 +834,11 @@ export default function Dashboard() {
                 </div>
               )}
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Hero section</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-900 sm:text-4xl">
-                  {monthlyRoundup.month_name} roundup
+                  {athleteName}
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
-                  {athleteName} · Your {monthlyRoundup.month_name} in sports.
+                  Your Monthly Roundup
                 </p>
                 <p className="mt-3 text-xs text-slate-400">
                   {lastSyncedLabel ? `Last synced ${lastSyncedLabel}` : isLoadingRoundup ? "Loading monthly data…" : "Monthly data ready"}
@@ -722,7 +866,20 @@ export default function Dashboard() {
                 )}
                 Sync activities
               </Button>
+              <Button
+                onClick={handleDeleteData}
+                disabled={isDeletingAthlete}
+                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-5 py-2.5 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDeletingAthlete ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete my data
+              </Button>
             </div>
+            {deleteError ? <p className="text-xs text-red-500">{deleteError}</p> : null}
           </div>
         </section>
 
@@ -735,7 +892,7 @@ export default function Dashboard() {
               <CardDescription className="text-slate-500">
                 {isLoadingRoundup
                   ? "Fetching the latest snapshot…"
-                  : `Snapshot for ${monthlyRoundup.month_label}. Data is ready to swap with live metrics.`}
+                  : `Your ${monthlyRoundup.month_label} In Sports.`}
               </CardDescription>
               {roundupError ? (
                 <p className="mt-3 text-sm text-red-500">{roundupError}</p>
@@ -751,22 +908,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{card.label}</p>
                       {card.type === "split" ? (
-                        <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                          {isLoadingRoundup ? (
-                            <li className="text-slate-400">Loading…</li>
-                          ) : splitWithPercentages.length > 0 ? (
-                            splitWithPercentages.map((entry) => (
-                              <li key={`${card.id}-${entry.type}`} className="flex items-center justify-between">
-                                <span>{entry.type}</span>
-                                <span className="text-slate-500">
-                                  {entry.count} · {entry.percentage.toFixed(1)}%
-                                </span>
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-slate-400">Not enough data yet</li>
-                          )}
-                        </ul>
+                        <ActivitySplitVisualization entries={splitWithPercentages} isLoading={isLoadingRoundup} />
                       ) : (
                         <p className="mt-4 text-3xl font-semibold text-slate-900">{card.primary}</p>
                       )}
@@ -794,25 +936,76 @@ export default function Dashboard() {
                       Loading calendar…
                     </div>
                   ) : (
-                    calendarCells.map((cell) => (
-                      <div
-                        key={cell.key}
-                        className={`aspect-square w-full rounded-2xl border text-sm font-medium transition ${
-                          cell.day
-                            ? cell.active
-                              ? "border-orange-200 bg-orange-50 text-orange-600 shadow-sm"
-                              : "border-slate-200 bg-white text-slate-600"
-                            : "border-transparent bg-transparent text-slate-300"
-                        } flex items-center justify-center`}
-                        title={
-                          cell.day && cell.stats
-                            ? `${cell.stats.total_activities} activities · ${formatDistance(cell.stats.total_distance_km)}`
-                            : undefined
-                        }
-                      >
-                        {cell.day || ""}
-                      </div>
-                    ))
+                    calendarCells.map((cell) => {
+                      const stats = cell.stats;
+                      const isCalendarDay = Boolean(cell.day);
+                      const isActiveDay = Boolean(isCalendarDay && cell.active && stats);
+                      const distanceKm = isActiveDay ? Number(stats.total_distance_km) || 0 : 0;
+                      const distanceRatio =
+                        isActiveDay && maxCalendarDistance > 0
+                          ? Math.min(Math.max(distanceKm / maxCalendarDistance, 0), 1)
+                          : 0;
+                      const circleSize = 28 + distanceRatio * 36;
+                      const backgroundOpacity = isActiveDay
+                        ? maxCalendarDistance > 0
+                          ? 0.18 + distanceRatio * 0.5
+                          : 0.25
+                        : 0;
+                      const borderOpacity = isActiveDay
+                        ? maxCalendarDistance > 0
+                          ? 0.4 + distanceRatio * 0.45
+                          : 0.5
+                        : 0.2;
+                      const cellStyle = isActiveDay
+                        ? {
+                            backgroundColor: `rgba(249, 115, 22, ${backgroundOpacity.toFixed(3)})`,
+                            borderColor: `rgba(249, 115, 22, ${borderOpacity.toFixed(3)})`,
+                          }
+                        : undefined;
+                      const tooltip =
+                        isCalendarDay && stats
+                          ? `${stats.total_activities} activities · ${formatDistance(stats.total_distance_km)}`
+                          : undefined;
+                      const formattedDistance = isActiveDay ? formatDailyDistance(distanceKm) : null;
+
+                      return (
+                        <div
+                          key={cell.key}
+                          className={[
+                            "aspect-square w-full rounded-2xl border transition",
+                            isCalendarDay ? "flex flex-col items-center justify-between gap-2 p-2 text-xs" : "border-transparent bg-transparent",
+                            isCalendarDay && !isActiveDay ? "border-slate-200 bg-white text-slate-400" : "",
+                            isActiveDay ? "text-orange-700 shadow-sm" : "",
+                            !isCalendarDay ? "text-slate-300" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          style={cellStyle}
+                          title={tooltip}
+                        >
+                          {isCalendarDay ? (
+                            <>
+                              <span className="text-[0.65rem] font-semibold tracking-tight">{cell.day}</span>
+                              {isActiveDay ? (
+                                <div
+                                  className="flex flex-col items-center justify-center rounded-full border border-orange-200 bg-white/90 text-[0.75rem] font-semibold text-orange-600 shadow-sm transition-all"
+                                  style={{ width: `${circleSize}px`, height: `${circleSize}px` }}
+                                >
+                                  <span>{formattedDistance}</span>
+                                  <span className="text-[0.55rem] font-medium uppercase tracking-wide text-orange-300">
+                                    km
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-1 items-center justify-center text-[0.6rem] tracking-wide text-slate-300">
+                                  —
+                                </div>
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
