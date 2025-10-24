@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Loader2, RefreshCcw, Share2 } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCcw, Share2, Trash2 } from "lucide-react";
 import SharePoster, { sharePosterTokens } from "@/components/share/SharePoster";
 import { useActivitySync } from "@/hooks/useActivitySync";
-import { fetchMonthlyRoundup } from "@/lib/api";
+import { deleteAthleteData, fetchMonthlyRoundup } from "@/lib/api";
 
 const sharePosterSize = { width: 1080, height: 1920 };
 const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -168,6 +168,88 @@ function formatWeeklyStreak(weeks) {
   return `${weeks} week${weeks === 1 ? "" : "s"}`;
 }
 
+const activitySplitColors = ["#f97316", "#6366f1", "#22c55e", "#facc15", "#0ea5e9", "#f43f5e", "#a855f7"];
+
+function ActivitySplitVisualization({ entries, isLoading }) {
+  if (isLoading) {
+    return <div className="mt-4 text-sm text-slate-400">Loading…</div>;
+  }
+  if (!entries || entries.length === 0) {
+    return <div className="mt-4 text-sm text-slate-400">Not enough data yet</div>;
+  }
+
+  const totalCount = entries.reduce((sum, entry) => sum + (Number(entry.count) || 0), 0);
+  if (totalCount === 0) {
+    return <div className="mt-4 text-sm text-slate-400">Not enough data yet</div>;
+  }
+
+  let cumulative = 0;
+  const segments = entries.map((entry, index) => {
+    const count = Number(entry.count) || 0;
+    const fraction = count / totalCount;
+    const start = cumulative;
+    cumulative += fraction;
+    const color = activitySplitColors[index % activitySplitColors.length];
+    return {
+      entry,
+      color,
+      fraction,
+      start,
+      end: cumulative,
+    };
+  });
+
+  // Ensure the gradient closes the circle even with rounding issues
+  if (segments.length > 0) {
+    segments[segments.length - 1].end = 1;
+  }
+
+  const gradientStops = segments
+    .map((segment) => {
+      const startDeg = `${segment.start * 360}deg`;
+      const endDeg = `${segment.end * 360}deg`;
+      return `${segment.color} ${startDeg} ${endDeg}`;
+    })
+    .join(", ");
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-5">
+      <div className="relative flex h-36 w-36 items-center justify-center">
+        <div
+          className="h-full w-full rounded-full border border-slate-100 shadow-inner"
+          style={{
+            backgroundImage: `conic-gradient(${gradientStops})`,
+          }}
+        />
+        <div className="absolute flex h-16 w-16 flex-col items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-600 shadow-sm">
+          <span>{totalCount.toLocaleString()}</span>
+          <span className="text-[0.6rem] uppercase tracking-wide text-slate-400">total</span>
+        </div>
+      </div>
+      <ul className="w-full space-y-2 text-sm text-slate-600">
+        {segments.map(({ entry, color, fraction }) => {
+          const percentageValue = Number(entry.percentage);
+          const safePercentage = Number.isFinite(percentageValue)
+            ? percentageValue
+            : Math.round(fraction * 1000) / 10;
+          return (
+            <li key={entry.type} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                <span className="font-medium">{entry.type}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">{entry.count.toLocaleString()}</span>
+                <span>{safePercentage.toFixed(1)}%</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const athleteName = (typeof window !== "undefined" && localStorage.getItem("athleteName")) || "Strava Athlete";
   const athleteImage = (typeof window !== "undefined" && localStorage.getItem("athleteImage")) || "";
@@ -177,6 +259,8 @@ export default function Dashboard() {
   const [roundupData, setRoundupData] = useState(null);
   const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
   const [roundupError, setRoundupError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [isDeletingAthlete, setIsDeletingAthlete] = useState(false);
   const [shareAthleteImage, setShareAthleteImage] = useState("");
 
   const monthParam = useMemo(() => getMonthParam(new Date()), []);
@@ -627,6 +711,42 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteData = async () => {
+    if (!athleteId || isDeletingAthlete) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      "This will permanently delete your synced activities and log you out. Do you want to continue?",
+    );
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeleteError(null);
+    setIsDeletingAthlete(true);
+
+    try {
+      await deleteAthleteData(athleteId);
+      if (typeof window !== "undefined") {
+        const keysToClear = ["athleteId", "athleteName", "athleteImage", "athleteProfile"];
+        keysToClear.forEach((key) => {
+          try {
+            window.localStorage.removeItem(key);
+          } catch (storageError) {
+            console.warn("Failed to remove key from localStorage", key, storageError);
+          }
+        });
+      }
+      window.location.assign("/");
+    } catch (error) {
+      console.error("Failed to delete athlete data", error);
+      setDeleteError(error?.message || "We could not delete your data. Please try again.");
+    } finally {
+      setIsDeletingAthlete(false);
+    }
+  };
+
   if (!athleteId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-white via-slate-50 to-slate-100 px-6 text-center text-slate-700">
@@ -746,7 +866,20 @@ export default function Dashboard() {
                 )}
                 Sync activities
               </Button>
+              <Button
+                onClick={handleDeleteData}
+                disabled={isDeletingAthlete}
+                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-5 py-2.5 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDeletingAthlete ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete my data
+              </Button>
             </div>
+            {deleteError ? <p className="text-xs text-red-500">{deleteError}</p> : null}
           </div>
         </section>
 
@@ -775,22 +908,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{card.label}</p>
                       {card.type === "split" ? (
-                        <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                          {isLoadingRoundup ? (
-                            <li className="text-slate-400">Loading…</li>
-                          ) : splitWithPercentages.length > 0 ? (
-                            splitWithPercentages.map((entry) => (
-                              <li key={`${card.id}-${entry.type}`} className="flex items-center justify-between">
-                                <span>{entry.type}</span>
-                                <span className="text-slate-500">
-                                  {entry.count} · {entry.percentage.toFixed(1)}%
-                                </span>
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-slate-400">Not enough data yet</li>
-                          )}
-                        </ul>
+                        <ActivitySplitVisualization entries={splitWithPercentages} isLoading={isLoadingRoundup} />
                       ) : (
                         <p className="mt-4 text-3xl font-semibold text-slate-900">{card.primary}</p>
                       )}

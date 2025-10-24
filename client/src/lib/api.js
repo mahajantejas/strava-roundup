@@ -70,3 +70,24 @@ export async function fetchMonthlyRoundup(athleteId, options = {}) {
 
   return response.json();
 }
+
+export async function deleteAthleteData(athleteId) {
+  if (!athleteId) {
+    throw new Error("Missing athlete identifier");
+  }
+
+  const url = buildUrl(`/athletes/${athleteId}`);
+
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Delete failed (${response.status}): ${text}`);
+  }
+}
