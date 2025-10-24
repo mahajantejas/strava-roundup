@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Loader2, RefreshCcw, Share2, Trash2 } from "lucide-react";
+import { AlertCircle, Download, Loader2, RefreshCcw, Trash2 } from "lucide-react";
 import SharePoster, { sharePosterTokens } from "@/components/share/SharePoster";
 import { useActivitySync } from "@/hooks/useActivitySync";
 import { deleteAthleteData, fetchMonthlyRoundup } from "@/lib/api";
@@ -590,11 +590,11 @@ export default function Dashboard() {
           root.setAttribute("viewBox", `0 0 ${parsedWidth} ${parsedHeight}`);
         }
 
-  // Set the exported SVG's rendered pixel size to the share poster size
-  root.setAttribute("width", `${sharePosterSize.width}`);
-  root.setAttribute("height", `${sharePosterSize.height}`);
-  // Ensure SVG preserves aspect ratio and centers the artwork when scaled
-  root.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        // Set the exported SVG's rendered pixel size to the share poster size
+        root.setAttribute("width", `${sharePosterSize.width}`);
+        root.setAttribute("height", `${sharePosterSize.height}`);
+        // Ensure SVG preserves aspect ratio and centers the artwork when scaled
+        root.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
         // Re-serialize the normalized SVG
         svgString = new XMLSerializer().serializeToString(root);
@@ -636,21 +636,19 @@ export default function Dashboard() {
         throw new Error("Canvas not supported");
       }
 
-  ctx.scale(scale, scale);
-  +ctx.clearRect(0, 0, sharePosterSize.width, sharePosterSize.height);
+      ctx.scale(scale, scale);
+      ctx.clearRect(0, 0, sharePosterSize.width, sharePosterSize.height);
 
+      // Draw the image centered while preserving aspect ratio (contain)
+      const imgW = image.naturalWidth || image.width || sharePosterSize.width;
+      const imgH = image.naturalHeight || image.height || sharePosterSize.height;
+      const fitScale = Math.min(sharePosterSize.width / imgW, sharePosterSize.height / imgH);
+      const destW = imgW * fitScale;
+      const destH = imgH * fitScale;
+      const destX = (sharePosterSize.width - destW) / 2;
+      const destY = (sharePosterSize.height - destH) / 2;
 
-  // Draw the image centered while preserving aspect ratio (contain)
-  // use the image's intrinsic pixel dimensions to compute a containment fit
-  const imgW = image.naturalWidth || image.width || sharePosterSize.width;
-  const imgH = image.naturalHeight || image.height || sharePosterSize.height;
-  const fitScale = Math.min(sharePosterSize.width / imgW, sharePosterSize.height / imgH);
-  const destW = imgW * fitScale;
-  const destH = imgH * fitScale;
-  const destX = (sharePosterSize.width - destW) / 2;
-  const destY = (sharePosterSize.height - destH) / 2;
-
-  ctx.drawImage(image, destX, destY, destW, destH);
+      ctx.drawImage(image, destX, destY, destW, destH);
 
       const blob = await new Promise((resolve) => {
         canvas.toBlob((canvasBlob) => resolve(canvasBlob), "image/png");
@@ -666,15 +664,7 @@ export default function Dashboard() {
       }
 
       const fileName = `strava-roundup-${Date.now()}.png`;
-      const file = new File([blob], fileName, { type: "image/png" });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: "My Strava Roundup",
-          text: shareMessage,
-        });
-      } else {
+      const triggerDownload = () => {
         const downloadUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = downloadUrl;
@@ -683,7 +673,24 @@ export default function Dashboard() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(downloadUrl);
+      };
+
+      const file = new File([blob], fileName, { type: "image/png" });
+      const canShareFiles =
+        typeof navigator !== "undefined" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] }) &&
+        typeof navigator.share === "function";
+
+      if (canShareFiles) {
+        await navigator.share({
+          files: [file],
+          title: "My Strava Roundup",
+          text: shareMessage,
+        });
       }
+
+      triggerDownload();
     } catch (error) {
       // surface more info to the console to help diagnose the root cause
       console.error("[share] generation error:", error);
@@ -851,8 +858,8 @@ export default function Dashboard() {
                 disabled={isSharing || isLoadingRoundup}
                 className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                <Share2 className="h-4 w-4" />
-                {isSharing ? "Creating image…" : "Share roundup"}
+                {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {isSharing ? "Preparing image…" : "Download snapshot"}
               </Button>
               <Button
                 onClick={handleSyncActivities}
