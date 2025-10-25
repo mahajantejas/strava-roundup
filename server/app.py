@@ -24,7 +24,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # React (Vite) dev server
-        "http://127.0.0.1:5173",  # sometimes Vite runs on this
+        "http://127.0.0.1:5173", # sometimes Vite runs on this
+        "https://your-strava-roundup-for-free.onrender.com", 
     ],
     allow_credentials=True,
     allow_methods=["*"],  # allow all HTTP methods (GET, POST, etc.)
