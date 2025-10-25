@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { useActivitySync } from "@/hooks/useActivitySync";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -85,7 +86,8 @@ export default function AuthCallback() {
       try {
         setLoading(true);
         setError(null);
-        const resp = await fetch(`/auth/strava/callback?code=${encodeURIComponent(code)}`, {
+        const base = API_BASE_URL || "";
+        const resp = await fetch(`${base}/auth/strava/callback?code=${encodeURIComponent(code)}`, {
           credentials: "same-origin",
         });
 

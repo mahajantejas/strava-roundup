@@ -5,6 +5,7 @@ import Dashboard from "./Dashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { API_BASE_URL } from "@/lib/api";
 
 function Landing() {
   const [loading, setLoading] = useState(false);
@@ -14,7 +15,9 @@ function Landing() {
     setError(null);
     setLoading(true);
     try {
-      window.location.href = "/auth/strava";
+      const redirectBase = API_BASE_URL || "";
+      const redirectUrl = redirectBase ? `${redirectBase}/auth/strava` : "/auth/strava";
+      window.location.href = redirectUrl;
     } catch (err) {
       setLoading(false);
       setError("Failed to redirect to Strava. Please try again.");

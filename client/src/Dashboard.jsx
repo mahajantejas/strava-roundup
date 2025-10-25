@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Download, Loader2, RefreshCcw, Trash2 } from "lucide-react";
 import SharePoster, { sharePosterTokens } from "@/components/share/SharePoster";
 import { useActivitySync } from "@/hooks/useActivitySync";
-import { deleteAthleteData, fetchMonthlyRoundup } from "@/lib/api";
+import { deleteAthleteData, fetchMonthlyRoundup, API_BASE_URL } from "@/lib/api";
 
 const sharePosterSize = { width: 1080, height: 1920 };
 const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -535,6 +535,7 @@ export default function Dashboard() {
           reader.readAsDataURL(blob);
         });
 
+      const apiBase = API_BASE_URL || "";
       let dataUrl = "";
 
       try {
@@ -551,7 +552,9 @@ export default function Dashboard() {
 
       if (!dataUrl) {
         try {
-          const proxyResponse = await fetch(`/proxy/image?url=${encodeURIComponent(athleteImage)}`);
+          const proxyResponse = await fetch(
+            `${apiBase}/proxy/image?url=${encodeURIComponent(athleteImage)}`
+          );
           if (!proxyResponse.ok) {
             throw new Error(`Proxy fetch failed: ${proxyResponse.status}`);
           }
