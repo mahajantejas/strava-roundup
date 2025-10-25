@@ -2,9 +2,8 @@ import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import AuthCallback from "./AuthCallback";
 import Dashboard from "./Dashboard";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import stravaConnectButton from "@/assets/strava-connect.svg";
 
 function Landing() {
   const [loading, setLoading] = useState(false);
@@ -44,14 +43,31 @@ function Landing() {
           <p className="text-lg sm:text-xl lg:text-2xl mb-8 text-gray-200 max-w-3xl mx-auto leading-relaxed">
             Generate Strava Premium Like Analytics, For Free ;)
           </p>
-          <Button
+          <button
+            type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
-            size="lg"
+            aria-label={loading ? "Connecting to Strava…" : "Connect with Strava"}
+            className={`relative inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#FC4C02] transition-transform duration-200 ${
+              loading ? "opacity-70 cursor-not-allowed" : "hover:scale-[1.01]"
+            }`}
           >
-            {loading ? "Connecting to Strava…" : "Connect with Strava"}
-          </Button>
+            <img
+              src={stravaConnectButton}
+              alt=""
+              role="presentation"
+              className="h-14 w-auto max-w-full"
+              draggable="false"
+            />
+            <span className="sr-only">
+              {loading ? "Connecting to Strava…" : "Connect with Strava"}
+            </span>
+          </button>
+          {loading && (
+            <p className="mt-4 text-sm font-semibold text-white" role="status">
+              Connecting to Strava…
+            </p>
+          )}
         </div>
       </section>
 
