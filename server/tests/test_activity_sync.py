@@ -119,6 +119,8 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
                 start_dt = datetime.fromisoformat(activity["start_date"].replace("Z", "+00:00"))
                 if after and start_dt <= after:
                     continue
+                if before and start_dt >= before:
+                    continue
                 yield activity
 
         def fetch_activity_detail(self, activity_id: int):
@@ -128,6 +130,16 @@ def test_sync_creates_and_updates_activities(monkeypatch, db_session: Session):
             return detail
 
     monkeypatch.setattr(activity_sync, "StravaClient", FakeStravaClient)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            anchor = datetime(2025, 2, 15, tzinfo=timezone.utc)
+            if tz is not None:
+                return anchor.astimezone(tz)
+            return anchor
+
+    monkeypatch.setattr(activity_sync, "datetime", FixedDateTime)
 
     summary = activity_sync.sync_athlete_activities(db_session, athlete.id)
 

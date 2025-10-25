@@ -9,6 +9,10 @@ import { deleteAthleteData, fetchMonthlyRoundup } from "@/lib/api";
 
 const sharePosterSize = { width: 1080, height: 1920 };
 const calendarHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const monthSelectionOptions = [
+  { key: "current", label: "This month", monthOffset: 0 },
+  { key: "previous", label: "Last month", monthOffset: -1 },
+];
 
 function getMonthParam(date = new Date()) {
   const year = date.getUTCFullYear();
@@ -73,7 +77,7 @@ function buildEmptyRoundup(monthParam) {
   };
 }
 
-function buildCalendarCells(calendarDays) {
+function buildCalendarCells(calendarDays, monthIdentifier = "unknown") {
   if (!Array.isArray(calendarDays) || calendarDays.length === 0) {
     return [];
   }
@@ -81,14 +85,16 @@ function buildCalendarCells(calendarDays) {
   const firstDate = new Date(`${calendarDays[0].date}T00:00:00Z`);
   const mondayBasedWeekday = (firstDate.getUTCDay() + 6) % 7;
   const cells = [];
+  const monthKeyBase =
+    typeof monthIdentifier === "string" && monthIdentifier.length > 0 ? monthIdentifier : calendarDays[0].date ?? "month";
 
   for (let index = 0; index < mondayBasedWeekday; index += 1) {
-    cells.push({ key: `blank-start-${index}`, day: null, active: false });
+    cells.push({ key: `${monthKeyBase}-blank-start-${index}`, day: null, active: false });
   }
 
   calendarDays.forEach((entry) => {
     cells.push({
-      key: `day-${entry.day}`,
+      key: `${monthKeyBase}-day-${entry.date ?? entry.day ?? cells.length}`,
       day: entry.day,
       active: entry.is_active,
       stats: entry,
@@ -96,7 +102,7 @@ function buildCalendarCells(calendarDays) {
   });
 
   while (cells.length % 7 !== 0) {
-    cells.push({ key: `blank-end-${cells.length}`, day: null, active: false });
+    cells.push({ key: `${monthKeyBase}-blank-end-${cells.length}`, day: null, active: false });
   }
 
   return cells;
@@ -255,19 +261,49 @@ export default function Dashboard() {
   const athleteImage = (typeof window !== "undefined" && localStorage.getItem("athleteImage")) || "";
   const athleteId = typeof window !== "undefined" ? localStorage.getItem("athleteId") : null;
 
+  const [selectedMonthKey, setSelectedMonthKey] = useState(monthSelectionOptions[0].key);
   const [isSharing, setIsSharing] = useState(false);
-  const [roundupData, setRoundupData] = useState(null);
+  const [roundupByMonth, setRoundupByMonth] = useState({});
   const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
   const [roundupError, setRoundupError] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const [isDeletingAthlete, setIsDeletingAthlete] = useState(false);
   const [shareAthleteImage, setShareAthleteImage] = useState("");
 
-  const monthParam = useMemo(() => getMonthParam(new Date()), []);
+  const selectedMonthDate = useMemo(() => {
+    const base = new Date();
+    const selectedOption =
+      monthSelectionOptions.find((option) => option.key === selectedMonthKey) ?? monthSelectionOptions[0];
+    return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + selectedOption.monthOffset, 1));
+  }, [selectedMonthKey]);
+  const monthParam = useMemo(() => getMonthParam(selectedMonthDate), [selectedMonthDate]);
   const fallbackRoundup = useMemo(() => buildEmptyRoundup(monthParam), [monthParam]);
-  const monthlyRoundup = roundupData ?? fallbackRoundup;
+  const hasLoadedRoundup = useMemo(
+    () => Object.prototype.hasOwnProperty.call(roundupByMonth, monthParam),
+    [roundupByMonth, monthParam],
+  );
+  const monthlyRoundup = useMemo(
+    () => roundupByMonth[monthParam] ?? fallbackRoundup,
+    [roundupByMonth, monthParam, fallbackRoundup],
+  );
   const athleteInitial = athleteName.trim().charAt(0).toUpperCase();
-  const currentYear = new Date().getFullYear();
+  const sharePosterYear = useMemo(() => {
+    const { period_start: periodStart, month } = monthlyRoundup ?? {};
+    if (typeof periodStart === "string") {
+      const parsed = new Date(periodStart);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.getUTCFullYear();
+      }
+    }
+    if (typeof month === "string") {
+      const [yearStr] = month.split("-");
+      const year = Number(yearStr);
+      if (Number.isFinite(year)) {
+        return year;
+      }
+    }
+    return new Date().getFullYear();
+  }, [monthlyRoundup]);
   const safeActiveDaysCount = Number(monthlyRoundup.total_active_days) || 0;
   const safeActivitiesCount = Number(monthlyRoundup.total_activities) || 0;
   const safeDistanceKm = Number(monthlyRoundup.total_distance_km) || 0;
@@ -289,8 +325,8 @@ export default function Dashboard() {
   }, [monthlyRoundup.activity_split]);
 
   const calendarCells = useMemo(
-    () => buildCalendarCells(monthlyRoundup.calendar_days),
-    [monthlyRoundup.calendar_days],
+    () => buildCalendarCells(monthlyRoundup.calendar_days, monthlyRoundup.month ?? monthParam),
+    [monthlyRoundup.calendar_days, monthlyRoundup.month, monthParam],
   );
   const maxCalendarDistance = useMemo(() => {
     if (!Array.isArray(monthlyRoundup.calendar_days) || monthlyRoundup.calendar_days.length === 0) {
@@ -300,7 +336,7 @@ export default function Dashboard() {
       (maxDistance, entry) => Math.max(maxDistance, Number(entry.total_distance_km) || 0),
       0,
     );
-  }, [monthlyRoundup.calendar_days]);
+  }, [monthlyRoundup.calendar_days, monthlyRoundup.month, monthParam]);
 
   const {
     syncState: dashboardSyncState,
@@ -433,10 +469,20 @@ export default function Dashboard() {
     setRoundupError(null);
     try {
       const response = await fetchMonthlyRoundup(athleteId, { month: monthParam });
-      setRoundupData(response);
+      setRoundupByMonth((prev) => ({
+        ...prev,
+        [monthParam]: response,
+      }));
     } catch (error) {
       console.error(error);
-      setRoundupData(null);
+      setRoundupByMonth((prev) => {
+        if (!prev || !prev[monthParam]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[monthParam];
+        return next;
+      });
       setRoundupError(error?.message || "We could not load the monthly roundup");
     } finally {
       setIsLoadingRoundup(false);
@@ -444,11 +490,15 @@ export default function Dashboard() {
   }, [athleteId, monthParam]);
 
   useEffect(() => {
-    if (!athleteId) {
+    if (!athleteId || hasLoadedRoundup) {
       return;
     }
     loadMonthlyRoundup();
-  }, [athleteId, loadMonthlyRoundup]);
+  }, [athleteId, hasLoadedRoundup, loadMonthlyRoundup]);
+
+  useEffect(() => {
+    setRoundupError(null);
+  }, [monthParam]);
 
   useEffect(() => {
     if (!athleteId) {
@@ -663,7 +713,12 @@ export default function Dashboard() {
         throw new Error("We could not create the image");
       }
 
-      const fileName = `strava-roundup-${Date.now()}.png`;
+      const monthSlugSource = monthlyRoundup?.month ?? monthParam;
+      const monthSlug =
+        typeof monthSlugSource === "string"
+          ? monthSlugSource.toLowerCase().replace(/[^0-9a-z]+/g, "-").replace(/^-+|-+$/g, "")
+          : "";
+      const fileName = `strava-roundup-${monthSlug || Date.now()}.png`;
       const triggerDownload = () => {
         const downloadUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -896,14 +951,41 @@ export default function Dashboard() {
           <Card className="rounded-3xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur">
             <CardHeader>
               <CardTitle className="text-2xl font-semibold text-slate-900">Monthly roundup</CardTitle>
-              <CardDescription className="text-slate-500">
-                {isLoadingRoundup
-                  ? "Fetching the latest snapshot…"
-                  : `Your ${monthlyRoundup.month_label} In Sports.`}
-              </CardDescription>
-              {roundupError ? (
-                <p className="mt-3 text-sm text-red-500">{roundupError}</p>
-              ) : null}
+          <CardDescription className="text-slate-500">
+            {isLoadingRoundup
+              ? "Fetching the latest snapshot…"
+              : `Your ${monthlyRoundup.month_label} In Sports.`}
+          </CardDescription>
+          <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-inner">
+            {monthSelectionOptions.map((option) => {
+              const isActive = option.key === selectedMonthKey;
+              return (
+                <Button
+                  key={option.key}
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    if (option.key !== selectedMonthKey) {
+                      setSelectedMonthKey(option.key);
+                    }
+                  }}
+                  className={[
+                    "rounded-full px-4 py-1 text-xs font-semibold transition-all",
+                    isActive
+                      ? "bg-white text-orange-600 shadow-sm"
+                      : "text-slate-500 hover:bg-white hover:text-slate-700",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {option.label}
+                </Button>
+              );
+            })}
+          </div>
+          {roundupError ? (
+            <p className="mt-3 text-sm text-red-500">{roundupError}</p>
+          ) : null}
             </CardHeader>
             <CardContent className="space-y-8">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -937,7 +1019,10 @@ export default function Dashboard() {
                     </span>
                   ))}
                 </div>
-                <div className="mt-2 grid grid-cols-7 gap-2">
+                <div
+                  key={monthlyRoundup.month ?? monthParam}
+                  className="mt-2 grid grid-cols-7 gap-2"
+                >
                   {isLoadingRoundup && calendarCells.length === 0 ? (
                     <div className="col-span-7 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
                       Loading calendar…
@@ -1018,8 +1103,13 @@ export default function Dashboard() {
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-inner">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Monthly insights</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Monthly insights • {monthlyRoundup.month_label}
+                </p>
+                <div
+                  key={`insights-${monthlyRoundup.month ?? monthParam}`}
+                  className="mt-4 grid gap-3 sm:grid-cols-2"
+                >
                   <InsightItem label="Most active day" value={mostActiveDayText} />
                   <InsightItem label="Most active time of day" value={mostActiveTimeText} />
                   <InsightItem label="Average activity time per day" value={averageActivityTimeText} />
@@ -1042,7 +1132,7 @@ export default function Dashboard() {
         metrics={shareMetrics}
         distanceHeadline={`${formatDistance(safeDistanceKm)} across ${safeActivitiesCount.toLocaleString()} activities`}
         summaryLine={`${safeActiveDaysCount.toLocaleString()} active days • ${totalMovingTimeDisplay} in motion`}
-        posterYear={currentYear}
+        posterYear={sharePosterYear}
         posterImage={shareAthleteImage}
         templateSvg={shareTemplateSvg}
       />
