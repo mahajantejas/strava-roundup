@@ -12,6 +12,18 @@ class AthleteNotFoundError(Exception):
     """Raised when attempting to sync an athlete that does not exist."""
 
 
+def _start_of_month(dt: datetime) -> datetime:
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+
+
+def _shift_month(dt: datetime, offset: int) -> datetime:
+    # Work with 1-based month indexing to avoid dateutil dependency.
+    month_index = dt.month - 1 + offset
+    year = dt.year + month_index // 12
+    month = month_index % 12 + 1
+    return dt.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 def sync_athlete_activities(
     db: Session,
     athlete_id: int,
@@ -22,6 +34,17 @@ def sync_athlete_activities(
     athlete = db.query(Athlete).filter(Athlete.id == athlete_id).first()
     if not athlete:
         raise AthleteNotFoundError(f"Athlete {athlete_id} was not found")
+
+    now_utc = datetime.now(timezone.utc)
+    current_month_start = _start_of_month(now_utc)
+    previous_month_start = _shift_month(current_month_start, -1)
+    window_start = max(previous_month_start, baseline)
+    # Capture current + previous months; ensure end is always after start even if baseline > now.
+    window_end_candidates = [
+        _shift_month(current_month_start, 1),  # start of next month based on "now"
+        _shift_month(window_start, 2),  # at least two full months starting at window_start
+    ]
+    window_end = max(window_end_candidates)
 
     since_cutoff = since
     if since_cutoff is None:
@@ -40,6 +63,12 @@ def sync_athlete_activities(
         since_cutoff = since_cutoff.replace(tzinfo=timezone.utc)
     if since_cutoff is None or since_cutoff < baseline:
         since_cutoff = baseline
+    # Always constrain to the two-month window the dashboard cares about.
+    if since_cutoff < window_start:
+        since_cutoff = window_start
+    if since_cutoff >= window_end:
+        # fall back to the start of the window to guarantee we fetch data
+        since_cutoff = window_start
 
     client = StravaClient(db, athlete)
 
@@ -88,7 +117,7 @@ def sync_athlete_activities(
             created += 1
 
     try:
-        for raw_activity in client.iter_activities(after=since_cutoff):
+        for raw_activity in client.iter_activities(after=since_cutoff, before=window_end):
             fetched += 1
             normalized = StravaClient.normalize_activity(raw_activity)
             upsert_activity(normalized)
