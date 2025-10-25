@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import AuthCallback from "./AuthCallback";
 import Dashboard from "./Dashboard";
 import { Button } from "@/components/ui/button";
@@ -145,11 +145,31 @@ function Landing() {
   );
 }
 
+function IndexRedirect() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    if (params.has("status") || params.has("code")) {
+      navigate(
+        { pathname: "/auth/callback", search: location.search },
+        { replace: true },
+      );
+    } else {
+      navigate("/", { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/index.html" element={<IndexRedirect />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
