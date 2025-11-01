@@ -13,6 +13,8 @@ const monthSelectionOptions = [
   { key: "current", label: "This month", monthOffset: 0 },
   { key: "previous", label: "Last month", monthOffset: -1 },
 ];
+const defaultMonthOption =
+  monthSelectionOptions.find((option) => option.key === "previous") ?? monthSelectionOptions[0];
 
 function getMonthParam(date = new Date()) {
   const year = date.getUTCFullYear();
@@ -261,7 +263,7 @@ export default function Dashboard() {
   const athleteImage = (typeof window !== "undefined" && localStorage.getItem("athleteImage")) || "";
   const athleteId = typeof window !== "undefined" ? localStorage.getItem("athleteId") : null;
 
-  const [selectedMonthKey, setSelectedMonthKey] = useState(monthSelectionOptions[0].key);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(defaultMonthOption.key);
   const [isSharing, setIsSharing] = useState(false);
   const [roundupByMonth, setRoundupByMonth] = useState({});
   const [isLoadingRoundup, setIsLoadingRoundup] = useState(false);
