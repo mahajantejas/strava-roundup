@@ -137,7 +137,8 @@ function Landing() {
 
       <footer className="bg-gray-900 text-gray-300 py-6">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-sm">
-          <span>&copy; {new Date().getFullYear()} Strava Round Up. All rights reserved.</span>
+          <span>Made with ❤️ and 🤖 by Tejas</span>
+          <span>Practically no rights reserved</span>
           <Link to="/help" className="text-orange-400 hover:text-orange-300 underline">
             Help &amp; FAQs
           </Link>

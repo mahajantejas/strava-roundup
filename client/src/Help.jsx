@@ -21,7 +21,7 @@ const faqs = [
   {
     question: "Who can I contact for support?",
     answer:
-      "If you run into issues, send us a note at support@stravaroundup.com with a brief description and screenshots so we can help quickly.",
+      "If you run into issues, send us a note at tejas.mahajan07.1@gmail.com with a brief description and screenshots so we can help quickly.",
   },
 ];
 
