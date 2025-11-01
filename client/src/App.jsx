@@ -3,14 +3,42 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "re
 import AuthCallback from "./AuthCallback";
 import Dashboard from "./Dashboard";
 import Help from "./Help";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { API_BASE_URL } from "@/lib/api";
+import { Github } from "lucide-react";
+import stravaConnect from "@/assets/strava-connect.svg";
+import shortlistCycline2 from "@/assets/shortlist_cycline2.jpg";
+import shortlistCycling from "@/assets/shortlist_cycling.jpg";
+import shortlistRun from "@/assets/shortlist_run.jpg";
+import shortlistRun2 from "@/assets/shortlist_run2.jpg";
+import shortlistRun3 from "@/assets/shortlist_run3.jpg";
+import shortlistSwim from "@/assets/shortlist_swim.jpg";
+import shortlistSwim2 from "@/assets/shortlist_swim2.jpg";
+import shortlistWorkout from "@/assets/shortlist_workout.jpg";
+import shortlistWorkout2 from "@/assets/shortlist_workout2.jpg";
+
+const landingImages = [
+  shortlistCycline2,
+  shortlistCycling,
+  shortlistRun,
+  shortlistRun2,
+  shortlistRun3,
+  shortlistSwim,
+  shortlistSwim2,
+  shortlistWorkout,
+  shortlistWorkout2,
+];
 
 function Landing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [heroImage] = useState(() => {
+    if (!landingImages.length) {
+      return null;
+    }
+    const randomIndex = Math.floor(Math.random() * landingImages.length);
+    return landingImages[randomIndex];
+  });
 
   const handleLogin = () => {
     setError(null);
@@ -33,7 +61,7 @@ function Landing() {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80')`
+            backgroundImage: heroImage ? `url(${heroImage})` : undefined,
           }}
         >
           {/* Overlay for better text readability */}
@@ -48,14 +76,19 @@ function Landing() {
           <p className="text-lg sm:text-xl lg:text-2xl mb-8 text-gray-200 max-w-3xl mx-auto leading-relaxed">
             Generate Strava Premium Like Analytics, For Free ;)
           </p>
-          <Button
+          <button
+            type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
-            size="lg"
+            aria-label="Connect with Strava"
+            className="inline-flex items-center justify-center bg-transparent rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500 transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:translate-y-0"
           >
-            {loading ? "Connecting to Strava…" : "Connect with Strava"}
-          </Button>
+            <img src={stravaConnect} alt="" className="h-14 w-auto" />
+            <span className="sr-only">Connect with Strava</span>
+          </button>
+          <div className="mt-4 text-sm text-gray-200 min-h-[1.5rem]" aria-live="polite">
+            {loading ? "Connecting to Strava…" : null}
+          </div>
         </div>
       </section>
 
@@ -136,11 +169,25 @@ function Landing() {
       </section>
 
       <footer className="bg-gray-900 text-gray-300 py-6">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-sm">
-          <span>&copy; {new Date().getFullYear()} Strava Round Up. All rights reserved.</span>
-          <Link to="/help" className="text-orange-400 hover:text-orange-300 underline">
-            Help &amp; FAQs
-          </Link>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col items-center gap-1 sm:items-start">
+            <span>Practically no rights reserved.</span>
+            <span>Made with ❤️ by Tejas</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
+            <a
+              href="https://github.com/mahajantejas/strava-roundup"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-orange-400 hover:text-orange-300 underline underline-offset-4"
+            >
+              <Github className="h-4 w-4" aria-hidden="true" />
+              <span>View on GitHub</span>
+            </a>
+            <Link to="/help" className="text-orange-400 hover:text-orange-300 underline underline-offset-4">
+              Help &amp; FAQs
+            </Link>
+          </div>
         </div>
       </footer>
     </main>
