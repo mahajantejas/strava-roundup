@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import AuthCallback from "./AuthCallback";
 import Dashboard from "./Dashboard";
+import Help from "./Help";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -131,16 +132,17 @@ function Landing() {
             </div>
           )}
 
-          {/* Testing Link */}
-          <div className="text-center mt-12 text-sm text-gray-500">
-            For testing:{" "}
-            <Link to="/auth/callback" className="text-blue-600 hover:text-blue-700 underline">
-              open /auth/callback
-            </Link>
-            .
-          </div>
         </div>
       </section>
+
+      <footer className="bg-gray-900 text-gray-300 py-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2 text-sm">
+          <span>&copy; {new Date().getFullYear()} Strava Round Up. All rights reserved.</span>
+          <Link to="/help" className="text-orange-400 hover:text-orange-300 underline">
+            Help &amp; FAQs
+          </Link>
+        </div>
+      </footer>
     </main>
   );
 }
@@ -172,6 +174,7 @@ export default function App() {
         <Route path="/index.html" element={<IndexRedirect />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/help" element={<Help />} />
       </Routes>
     </BrowserRouter>
   );
